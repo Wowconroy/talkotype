@@ -58,8 +58,14 @@ export default function AppPage() {
 
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
-            href="/pricing"
+            href="/account"
             className="rounded-full bg-coral px-5 py-2.5 text-sm font-semibold text-white"
+          >
+            Account settings
+          </Link>
+          <Link
+            href="/pricing"
+            className="rounded-full border border-border bg-mist px-5 py-2.5 text-sm font-semibold text-ink"
           >
             See Unlimited
           </Link>

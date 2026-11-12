@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Headphones, Sparkles, Timer, Waves } from "lucide-react";
+import { ReviewsSlider } from "@/components/reviews-slider";
 import { StoryHero } from "@/components/story-hero";
+import { UnlimitedWelcome } from "@/components/unlimited-welcome";
 
 const perks = [
   {
@@ -124,6 +126,10 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <UnlimitedWelcome />
+
+      <ReviewsSlider />
 
       <section className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
         <div className="rounded-[2rem] bg-[linear-gradient(135deg,#123d3a_0%,#1f6f68_48%,#7ec8c3_100%)] px-6 py-12 text-white shadow-[0_30px_60px_rgba(18,61,58,0.18)] sm:px-10 sm:py-14">

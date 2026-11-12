@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 const navLinks = [
   { href: "/pricing", label: "Pricing" },
   { href: "/faq", label: "FAQ" },
+  { href: "/reviews", label: "Reviews" },
   { href: "/blog", label: "Blog" },
 ];
 
@@ -59,6 +60,12 @@ export function SiteHeader() {
                 className="rounded-full px-3 py-1.5 text-sm font-medium text-ink/80 hover:bg-white/70"
               >
                 My desk
+              </Link>
+              <Link
+                href="/account"
+                className="rounded-full px-3 py-1.5 text-sm font-medium text-ink/80 hover:bg-white/70"
+              >
+                Settings
               </Link>
               <button
                 type="button"
@@ -131,6 +138,13 @@ export function SiteHeader() {
                 className="rounded-xl border border-border bg-white px-3 py-2 text-center text-sm font-medium"
               >
                 My desk
+              </Link>
+              <Link
+                href="/account"
+                onClick={() => setOpen(false)}
+                className="rounded-xl border border-border bg-white px-3 py-2 text-center text-sm font-medium"
+              >
+                Settings
               </Link>
               <button
                 type="button"

@@ -3,7 +3,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight } from "lucide-react";
+import {
+  ArrowRight,
+  Crosshair,
+  Globe2,
+  InfinityIcon,
+  Lock,
+  Rocket,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const slides = [
@@ -39,13 +48,40 @@ const slides = [
   },
 ];
 
+const featureStrip = [
+  { icon: Crosshair, label: "High accuracy", tone: "bg-coral text-white" },
+  { icon: Globe2, label: "98+ languages", tone: "bg-sea text-ink" },
+  { icon: Rocket, label: "5 hour uploads", tone: "bg-lemon text-ink" },
+  { icon: InfinityIcon, label: "Unlimited minutes", tone: "bg-[#2db87c] text-white" },
+  { icon: Users, label: "Speaker labels", tone: "bg-ink text-white" },
+  { icon: Lock, label: "Private & secure", tone: "bg-[#f0b429] text-ink" },
+];
+
+const HOURS_BASE = 1_284_620;
+const HOURS_PER_SECOND = 0.09;
+
+function formatHours(value: number) {
+  return Math.floor(value).toLocaleString("en-US");
+}
+
 export function StoryHero() {
   const [active, setActive] = useState(0);
+  const [hours, setHours] = useState(HOURS_BASE);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       setActive((current) => (current + 1) % slides.length);
     }, 3200);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const started = Date.now();
+    setHours(HOURS_BASE);
+    const timer = window.setInterval(() => {
+      const elapsed = (Date.now() - started) / 1000;
+      setHours(HOURS_BASE + elapsed * HOURS_PER_SECOND);
+    }, 900);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -60,6 +96,20 @@ export function StoryHero() {
 
       <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
+          <div className="animate-rise mb-6 flex justify-center">
+            <p className="inline-flex items-center gap-2.5 rounded-full border border-coral/35 bg-white/95 px-4 py-2 text-sm font-semibold text-ink shadow-[0_12px_28px_rgba(255,92,69,0.12)]">
+              <span className="grid size-7 place-items-center rounded-lg bg-coral text-white">
+                <TrendingUp className="size-3.5" aria-hidden />
+              </span>
+              <span>
+                <span className="tabular-nums text-coral">
+                  {formatHours(hours)}
+                </span>{" "}
+                <span className="text-ink/80">hours transcribed</span>
+              </span>
+            </p>
+          </div>
+
           <p className="animate-rise font-display text-5xl font-semibold tracking-tight text-ink sm:text-6xl">
             Talko<span className="text-coral">type</span>
           </p>
@@ -164,6 +214,27 @@ export function StoryHero() {
                 </span>
               </button>
             ))}
+          </div>
+
+          <div className="mt-6 overflow-x-auto rounded-[1.4rem] border border-border/70 bg-ink px-3 py-3.5 shadow-[0_18px_40px_rgba(18,61,58,0.16)] sm:px-4">
+            <ul className="flex min-w-max items-center justify-between gap-4 sm:min-w-0 sm:gap-2 md:gap-3">
+              {featureStrip.map((feature) => (
+                <li
+                  key={feature.label}
+                  className="flex items-center gap-2 whitespace-nowrap px-1 text-sm font-semibold text-white/95"
+                >
+                  <span
+                    className={cn(
+                      "grid size-8 shrink-0 place-items-center rounded-lg",
+                      feature.tone,
+                    )}
+                  >
+                    <feature.icon className="size-4" aria-hidden />
+                  </span>
+                  {feature.label}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>
