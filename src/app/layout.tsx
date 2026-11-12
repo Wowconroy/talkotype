@@ -23,6 +23,10 @@ export const metadata: Metadata = {
   },
   description:
     "Talkotype turns audio and video into clean text in seconds. Light mood, serious accuracy, free to try.",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/apple-icon", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
