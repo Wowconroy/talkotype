@@ -54,6 +54,20 @@ export default function AppPage() {
           <p className="mt-2 text-sm text-muted-foreground">
             Signed in with {user.provider === "google" ? "Google" : user.email}.
           </p>
+          <p className="mx-auto mt-4 max-w-md text-xs leading-relaxed text-muted-foreground">
+            When uploads go live, files you submit will be processed to create a
+            transcript for your account. Only upload recordings you have the
+            right to process. Details on access, retention, and deletion are in
+            our{" "}
+            <Link href="/privacy" className="font-semibold text-ink underline">
+              Privacy Policy
+            </Link>{" "}
+            and{" "}
+            <Link href="/terms" className="font-semibold text-ink underline">
+              Terms of Service
+            </Link>
+            .
+          </p>
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">

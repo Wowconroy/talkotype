@@ -120,17 +120,19 @@ export function PricingPlans() {
         </div>
       </div>
 
-      <div className="mx-auto mt-10 grid max-w-5xl items-stretch gap-5 md:grid-cols-2">
-        <article className="flex h-full min-h-[36.5rem] flex-col rounded-[1.75rem] bg-[#2a3634] p-7 text-white shadow-[0_22px_50px_rgba(18,61,58,0.16)]">
+      <div className="mx-auto mt-10 grid max-w-5xl grid-rows-1 items-stretch gap-5 md:grid-cols-2">
+        <article className="flex h-full flex-col rounded-[1.75rem] bg-[#2a3634] p-7 text-white shadow-[0_22px_50px_rgba(18,61,58,0.16)]">
           <h2 className="font-display text-lg font-semibold tracking-tight">
             Talkotype Free
           </h2>
           <div className="mt-3 h-px w-full bg-white/15" />
-          <div className="mt-6 min-h-[7.5rem]">
-            <p className="font-display text-5xl font-semibold tracking-tight">
+          <div className="mt-6 flex min-h-[10.5rem] flex-col">
+            <p className="font-display text-5xl font-semibold tracking-tight sm:text-6xl">
               Free
             </p>
-            <p className="mt-1 text-sm text-white/65">100% Free</p>
+            <div className="mt-3 min-h-[4.75rem]">
+              <p className="text-sm text-white/65">100% Free</p>
+            </div>
           </div>
 
           <ul className="mt-8 flex-1 space-y-5">
@@ -157,7 +159,7 @@ export function PricingPlans() {
           </Link>
         </article>
 
-        <article className="relative flex h-full min-h-[36.5rem] flex-col overflow-hidden rounded-[1.75rem] bg-coral p-7 text-white shadow-[0_28px_60px_rgba(255,92,69,0.28)]">
+        <article className="relative flex h-full flex-col overflow-hidden rounded-[1.75rem] bg-coral p-7 text-white shadow-[0_28px_60px_rgba(255,92,69,0.28)]">
           <div
             aria-hidden
             className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-lemon/25 blur-2xl"
@@ -172,7 +174,7 @@ export function PricingPlans() {
           </h2>
           <div className="relative mt-3 h-px w-full bg-white/25" />
 
-          <div className="relative mt-6 min-h-[7.5rem]">
+          <div className="relative mt-6 flex min-h-[10.5rem] flex-col">
             <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span className="font-display text-5xl font-semibold tracking-tight sm:text-6xl">
                 {money(isYearly ? yearlyPerMonth : MONTHLY_PRICE)}
@@ -180,7 +182,7 @@ export function PricingPlans() {
               <span className="text-lg font-medium text-white/85">/ month</span>
             </p>
 
-            <div className="mt-3 space-y-1.5" aria-live="polite">
+            <div className="mt-3 min-h-[4.75rem] space-y-1.5" aria-live="polite">
               {isYearly ? (
                 <>
                   <p className="flex flex-wrap items-center gap-2 text-sm text-white/90">
@@ -189,7 +191,7 @@ export function PricingPlans() {
                       SAVE 30%
                     </span>
                   </p>
-                  <p className="text-sm text-white/80">
+                  <p className="text-sm leading-snug text-white/80">
                     That’s {money(yearlySaved)} less than paying monthly —
                     same Unlimited glow, quieter bill.
                   </p>

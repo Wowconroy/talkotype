@@ -149,18 +149,18 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       <p className="mt-5 text-center text-sm leading-relaxed text-muted-foreground">
         {isSignup ? (
           <>
-            By using Talkotype, you pinky-promise you&apos;ve glanced at our{" "}
+            By creating an account, you agree to our{" "}
             <Link href="/terms" className="font-medium text-ink underline decoration-sea/60 underline-offset-2">
-              terms
+              Terms of Service
             </Link>{" "}
             and{" "}
             <Link href="/privacy" className="font-medium text-ink underline decoration-sea/60 underline-offset-2">
-              privacy policy
+              Privacy Policy
             </Link>
-            . Or at least walked past them confidently.
+            .
             <br />
             <span className="mt-2 inline-block">
-              Already gossiping with us?{" "}
+              Already have an account?{" "}
               <Link href="/login" className="font-semibold text-coral">
                 Log in
               </Link>
@@ -168,11 +168,10 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           </>
         ) : (
           <>
-            New around here?{" "}
+            New to Talkotype?{" "}
             <Link href="/signup" className="font-semibold text-coral">
               Sign up
-            </Link>{" "}
-            — it&apos;s freer than a Friday afternoon.
+            </Link>
           </>
         )}
       </p>

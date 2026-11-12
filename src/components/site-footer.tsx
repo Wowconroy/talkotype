@@ -18,8 +18,18 @@ export function SiteFooter() {
         <div className="max-w-sm space-y-3">
           <Logo />
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Talkotype turns messy audio into clean text — lightly, quickly, and
-            with zero drama. Bring the rambles. We&apos;ll bring the words.
+            Talkotype turns audio and video into editable transcripts. See our{" "}
+            <Link href="/terms" className="font-medium text-ink hover:underline">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link
+              href="/privacy"
+              className="font-medium text-ink hover:underline"
+            >
+              Privacy Policy
+            </Link>
+            .
           </p>
         </div>
         <nav className="flex flex-wrap gap-x-5 gap-y-2">
@@ -36,7 +46,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-border/70">
         <p className="mx-auto max-w-6xl px-4 py-4 text-xs text-muted-foreground sm:px-6">
-          © 2026 Talkotype. Made for people who talk faster than they type.
+          © 2026 Talkotype. All rights reserved.
         </p>
       </div>
     </footer>
