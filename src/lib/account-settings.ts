@@ -132,7 +132,7 @@ export function setPlan(
       {
         id: crypto.randomUUID(),
         label: "Talkotype Unlimited — starter invoice",
-        amountLabel: billingInterval === "yearly" ? "$100.80" : "$12.00",
+        amountLabel: billingInterval === "yearly" ? "$168.00" : "$20.00",
         createdAt: new Date().toISOString(),
       },
     ];

@@ -148,6 +148,19 @@
   .animate-wiggle {
     animation: wiggle 3.2s ease-in-out infinite;
   }
+
+  .animate-reviews-marquee {
+    width: max-content;
+    animation: reviews-marquee 70s linear infinite;
+  }
+
+  .animate-reviews-marquee[data-paused="true"] {
+    animation-play-state: paused;
+  }
+
+  .animate-reviews-marquee[data-direction="reverse"] {
+    animation-direction: reverse;
+  }
 }
 
 @keyframes rise {
@@ -181,12 +194,22 @@
   }
 }
 
+@keyframes reviews-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
   .animate-rise-delay,
   .animate-rise-delay-2,
   .animate-float,
-  .animate-wiggle {
+  .animate-wiggle,
+  .animate-reviews-marquee {
     animation: none !important;
   }
 }

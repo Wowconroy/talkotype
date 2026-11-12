@@ -78,16 +78,16 @@ const faqs: FaqItem[] = [
   {
     q: "How much does Talkotype cost?",
     plain:
-      "Talkotype Free is $0 with 3 transcripts per day. Unlimited is $12 per month billed monthly, or $8.40 per month when billed yearly ($100.80/year) — save 30% versus paying monthly.",
+      "Talkotype Free is $0 with 3 transcripts per day. Unlimited is $20 per month billed monthly, or $14 per month when billed yearly ($168/year) — save 30% versus paying monthly.",
     a: (
       <>
         <Link href="/pricing" className="font-semibold text-coral hover:underline">
           Free
         </Link>{" "}
         is $0 — 3 transcripts a day, no card required.{" "}
-        <strong>Unlimited</strong> is <strong>$12/month</strong> billed monthly,
-        or <strong>$8.40/month</strong> when you pay yearly (
-        <strong>$100.80</strong> billed once a year) — that&apos;s{" "}
+        <strong>Unlimited</strong> is <strong>$20/month</strong> billed monthly,
+        or <strong>$14/month</strong> when you pay yearly (
+        <strong>$168</strong> billed once a year) — that&apos;s{" "}
         <strong>30% less</strong> than twelve monthly payments. Same features
         either way; yearly just softens the bill.
       </>

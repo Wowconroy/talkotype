@@ -185,8 +185,8 @@ export function AccountSettings() {
                     {account.plan === "free"
                       ? `${used} of ${FREE_DAILY_LIMIT} daily transcriptions used.`
                       : account.billingInterval === "yearly"
-                        ? "$8.40 / month · billed yearly"
-                        : "$12 / month · billed monthly"}
+                        ? "$14 / month · billed yearly"
+                        : "$20 / month · billed monthly"}
                   </p>
                 </div>
               </div>
