@@ -6,7 +6,7 @@ export type Review = {
   role?: string;
   featured?: boolean;
   paragraphs: { text: string; bold?: string[] }[];
-  accent: "sea" | "coral" | "lemon" | "ink";
+  accent?: "sea" | "coral" | "lemon" | "ink";
 };
 
 /** Illustrative testimonials for Talkotype marketing pages. */

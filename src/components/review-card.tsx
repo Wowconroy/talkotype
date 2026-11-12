@@ -1,11 +1,11 @@
 import type { Review } from "@/content/reviews";
 
-const accentClass: Record<Review["accent"], string> = {
+const accentClass = {
   sea: "bg-sea text-ink",
   coral: "bg-coral text-white",
   lemon: "bg-lemon text-ink",
   ink: "bg-ink text-white",
-};
+} as const;
 
 function emphasize(text: string, bold: string[] = []) {
   if (!bold.length) return text;
@@ -52,7 +52,7 @@ export function ReviewCard({
     >
       <header className="flex items-center gap-3">
         <span
-          className={`grid size-11 shrink-0 place-items-center rounded-full font-display text-sm font-semibold ${accentClass[review.accent]}`}
+          className={`grid size-11 shrink-0 place-items-center rounded-full font-display text-sm font-semibold ${accentClass[review.accent ?? "coral"]}`}
           aria-hidden
         >
           {initials}
