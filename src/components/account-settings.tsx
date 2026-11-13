@@ -2,17 +2,110 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Download, InfinityIcon } from "lucide-react";
+import {
+  Clock3,
+  Download,
+  FileAudio2,
+  InfinityIcon,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { clearSession, getSessionUser, type TalkotypeUser } from "@/lib/auth";
 import {
   resolveDisplayName,
   setCachedDisplayName,
 } from "@/lib/display-name";
 import { createClient } from "@/lib/supabase/client";
-import type { AccountBootstrapPayload } from "@/lib/account-data";
+import type {
+  AccountBootstrapPayload,
+  AccountLibraryStats,
+} from "@/lib/account-data";
 import { FREE_DAILY_TRANSCRIPTS } from "@/lib/plan-limits";
+
+function formatAudioDuration(totalSeconds: number) {
+  const sec = Math.max(0, Math.round(totalSeconds));
+  if (sec < 60) return `${sec}s`;
+  const minutes = Math.floor(sec / 60);
+  if (minutes < 60) {
+    const rem = sec % 60;
+    return rem > 0 ? `${minutes}m ${rem}s` : `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remMin = minutes % 60;
+  return remMin > 0 ? `${hours}h ${remMin}m` : `${hours}h`;
+}
+
+function WaveMark() {
+  return (
+    <svg
+      viewBox="0 0 64 28"
+      className="h-7 w-14 text-coral/70"
+      aria-hidden
+    >
+      {[6, 14, 10, 20, 12, 24, 16, 22, 11, 18, 8, 15].map((h, i) => (
+        <rect
+          key={i}
+          x={i * 5}
+          y={28 - h}
+          width="3"
+          height={h}
+          rx="1.5"
+          fill="currentColor"
+          opacity={0.35 + (i % 5) * 0.12}
+        />
+      ))}
+    </svg>
+  );
+}
+
+function StatCard({
+  title,
+  subtitle,
+  value,
+  footnote,
+  icon,
+}: {
+  title: string;
+  subtitle: string;
+  value: string;
+  footnote: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-mist/60 px-4 py-4 sm:px-5 sm:py-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-ink">{title}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white text-coral shadow-sm">
+          {icon}
+        </span>
+      </div>
+      <p className="mt-4 font-display text-4xl font-semibold tracking-tight text-ink">
+        {value}
+      </p>
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <p className="text-xs text-muted-foreground">{footnote}</p>
+        <WaveMark />
+      </div>
+    </div>
+  );
+}
+
+const EMPTY_STATS: AccountLibraryStats = {
+  inLibrary: 0,
+  readyInLibrary: 0,
+  removedFromLibrary: 0,
+  allTimeFiles: 0,
+  libraryAudioSeconds: 0,
+  allTimeAudioSeconds: 0,
+  thisMonthFiles: 0,
+  averageDurationSeconds: 0,
+  longestDurationSeconds: 0,
+};
 
 const PaddleCheckoutButton = dynamic(
   () =>
@@ -42,6 +135,7 @@ type AccountView = {
     amountLabel: string;
     url?: string | null;
   }>;
+  stats: AccountLibraryStats;
 };
 
 function Toggle({
@@ -114,6 +208,7 @@ function mapAccountPayload(payload: AccountBootstrapPayload): AccountView {
       })}`,
       url: invoice.invoice_url,
     })),
+    stats: payload.stats ?? EMPTY_STATS,
   };
 }
 
@@ -158,6 +253,7 @@ export function AccountSettings({
           productUpdates: true,
         },
         invoices: [],
+        stats: EMPTY_STATS,
       };
       setNameDraft(shell.name);
       return shell;
@@ -330,7 +426,7 @@ export function AccountSettings({
         className="pointer-events-none absolute inset-0 -z-10 bg-[repeating-linear-gradient(-45deg,transparent,transparent_14px,rgba(18,61,58,0.03)_14px,rgba(18,61,58,0.03)_15px)]"
       />
 
-      <div className="mx-auto w-full max-w-xl px-4 py-14 sm:px-6 sm:py-16">
+      <div className="mx-auto w-full max-w-3xl px-4 py-14 sm:px-6 sm:py-16">
         <div className="mb-6 flex justify-center">
           <span className="grid size-14 place-items-center rounded-full bg-coral shadow-[0_14px_30px_rgba(255,92,69,0.28)]">
             <InfinityIcon className="size-7 text-white" aria-hidden />
@@ -341,6 +437,62 @@ export function AccountSettings({
           <h1 className="text-center font-display text-3xl font-semibold tracking-tight text-ink">
             Account Settings
           </h1>
+
+          <section className="mt-8">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Your library
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Live desk totals plus all-time counts — deleted uploads still count
+              in the lifetime stats.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <StatCard
+                title="In your desk"
+                subtitle="Ready to read, edit and export"
+                value={String(account.stats.readyInLibrary)}
+                footnote={
+                  account.stats.inLibrary === account.stats.readyInLibrary
+                    ? `Across ${account.stats.inLibrary} file${account.stats.inLibrary === 1 ? "" : "s"}`
+                    : `${account.stats.inLibrary} in library · ${account.stats.readyInLibrary} ready`
+                }
+                icon={<FileAudio2 className="size-4" />}
+              />
+              <StatCard
+                title="Audio in library"
+                subtitle="Total duration still on your desk"
+                value={formatAudioDuration(account.stats.libraryAudioSeconds)}
+                footnote={
+                  account.stats.readyInLibrary > 0
+                    ? `Avg ${formatAudioDuration(account.stats.averageDurationSeconds)} · longest ${formatAudioDuration(account.stats.longestDurationSeconds)}`
+                    : "Transcribe a file to start the clock"
+                }
+                icon={<Clock3 className="size-4" />}
+              />
+              <StatCard
+                title="All-time files"
+                subtitle="Includes deleted uploads"
+                value={String(account.stats.allTimeFiles)}
+                footnote={
+                  account.stats.removedFromLibrary > 0
+                    ? `${account.stats.removedFromLibrary} removed from desk · lifetime keeps the count`
+                    : "Every successful transcription you’ve run"
+                }
+                icon={<Trash2 className="size-4" />}
+              />
+              <StatCard
+                title="All-time audio"
+                subtitle="Hours transcribed for you"
+                value={formatAudioDuration(account.stats.allTimeAudioSeconds)}
+                footnote={
+                  account.stats.thisMonthFiles > 0
+                    ? `${account.stats.thisMonthFiles} ready this month`
+                    : "Lifetime media time across your account"
+                }
+                icon={<Sparkles className="size-4" />}
+              />
+            </div>
+          </section>
 
           <section className="mt-8">
             <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
