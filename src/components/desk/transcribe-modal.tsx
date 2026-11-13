@@ -242,7 +242,10 @@ export function TranscribeModal({
     inputRef.current?.click();
   }
 
-  async function uploadOne(file: File, itemId: string) {
+  async function uploadOne(
+    file: File,
+    itemId: string,
+  ): Promise<"done" | "error" | "cancelled"> {
     const validated = validateUploadCandidate(plan, {
       name: file.name,
       size: file.size,
@@ -251,7 +254,7 @@ export function TranscribeModal({
     if (!validated.ok) {
       patchUpload(itemId, { status: "error", error: validated.error });
       setError(validated.error);
-      return;
+      return "error";
     }
 
     let step = "create";
@@ -292,7 +295,7 @@ export function TranscribeModal({
             error: created.error || "Plan limit reached",
           });
           setError(created.error || "Plan limit reached");
-          return;
+          return "error";
         }
         throw new Error(created.error || "Could not start upload");
       }
@@ -323,11 +326,12 @@ export function TranscribeModal({
       onUploaded(
         (created as { quota?: QuotaSnapshot | null }).quota ?? null,
       );
+      return "done";
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Upload failed";
       if (raw === "Upload cancelled.") {
         patchUpload(itemId, { status: "cancelled", error: raw });
-        return;
+        return "cancelled";
       }
       const hint =
         raw === "Failed to fetch" || /network|cors/i.test(raw)
@@ -337,6 +341,7 @@ export function TranscribeModal({
           : raw;
       patchUpload(itemId, { status: "error", error: hint });
       setError(hint);
+      return "error";
     }
   }
 
@@ -419,18 +424,25 @@ export function TranscribeModal({
 
     const work = files.map((file, i) => ({ file, id: items[i].id }));
     const concurrency = uploadPoolSize(plan);
+    const results: Array<"done" | "error" | "cancelled"> = [];
     await runPool(work, concurrency, async ({ file, id }) => {
-      await uploadOne(file, id);
+      results.push(await uploadOne(file, id));
     });
 
     setBusy(false);
-    const hadError = rejected.length > 0;
+    const doneCount = results.filter((r) => r === "done").length;
+    const failCount = results.filter((r) => r === "error").length;
+
+    // All queued successfully — close so the desk shows live progress.
+    if (doneCount > 0 && failCount === 0) {
+      onClose();
+      return;
+    }
+
     setMessage(
-      files.length === 1
-        ? hadError
-          ? `Finished with “${files[0].name}” (some files were skipped).`
-          : `Uploaded “${files[0].name}”. Transcription queued.`
-        : `Finished batch of ${files.length} files.`,
+      doneCount > 0
+        ? `Uploaded ${doneCount} file${doneCount === 1 ? "" : "s"}; ${failCount} failed.`
+        : "Upload failed. Fix the error and try again.",
     );
   }
 
