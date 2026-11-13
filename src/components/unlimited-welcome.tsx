@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   Briefcase,
@@ -6,6 +8,7 @@ import {
   Rocket,
   Volume2,
 } from "lucide-react";
+import { useViewerPlan } from "@/lib/use-viewer-plan";
 
 const perks = [
   {
@@ -42,9 +45,18 @@ const perks = [
 
 export function UnlimitedWelcome({
   showCta = true,
+  /** When true (default on home), hide the whole section for signed-in users. */
+  hideWhenLoggedIn = false,
 }: {
   showCta?: boolean;
+  hideWhenLoggedIn?: boolean;
 }) {
+  const { isLoggedIn, ready } = useViewerPlan();
+
+  if (hideWhenLoggedIn && (!ready || isLoggedIn)) {
+    return null;
+  }
+
   return (
     <section className="relative overflow-hidden">
       <div

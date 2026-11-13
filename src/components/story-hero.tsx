@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
+import { useViewerPlan } from "@/lib/use-viewer-plan";
 import { cn } from "@/lib/utils";
 
 const slides = [
@@ -65,6 +66,7 @@ function formatHours(value: number) {
 }
 
 export function StoryHero() {
+  const { isPaid, isLoggedIn } = useViewerPlan();
   const [active, setActive] = useState(0);
   const [hours, setHours] = useState(HOURS_BASE);
 
@@ -121,22 +123,55 @@ export function StoryHero() {
             typing notes again.
           </p>
           <div className="animate-rise-delay-2 mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link
-              href="/signup"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-coral px-6 py-3.5 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(255,92,69,0.28)] transition hover:-translate-y-0.5 hover:bg-[#ff6f5b]"
-            >
-              Try Talkotype free
-              <ArrowRight className="size-4" />
-            </Link>
-            <Link
-              href="/pricing"
-              className="inline-flex items-center justify-center rounded-full border border-border bg-white/80 px-6 py-3.5 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:bg-white"
-            >
-              Peek at pricing
-            </Link>
+            {isPaid ? (
+              <Link
+                href="/app"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-coral px-6 py-3.5 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(255,92,69,0.28)] transition hover:-translate-y-0.5 hover:bg-[#ff6f5b]"
+              >
+                <InfinityIcon className="size-4" />
+                Hurray — you’re Unlimited
+                <ArrowRight className="size-4" />
+              </Link>
+            ) : isLoggedIn ? (
+              <>
+                <Link
+                  href="/app"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-coral px-6 py-3.5 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(255,92,69,0.28)] transition hover:-translate-y-0.5 hover:bg-[#ff6f5b]"
+                >
+                  Open your desk
+                  <ArrowRight className="size-4" />
+                </Link>
+                <Link
+                  href="/pricing"
+                  className="inline-flex items-center justify-center rounded-full border border-border bg-white/80 px-6 py-3.5 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:bg-white"
+                >
+                  Peek at pricing
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-coral px-6 py-3.5 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(255,92,69,0.28)] transition hover:-translate-y-0.5 hover:bg-[#ff6f5b]"
+                >
+                  Try Talkotype free
+                  <ArrowRight className="size-4" />
+                </Link>
+                <Link
+                  href="/pricing"
+                  className="inline-flex items-center justify-center rounded-full border border-border bg-white/80 px-6 py-3.5 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:bg-white"
+                >
+                  Peek at pricing
+                </Link>
+              </>
+            )}
           </div>
           <p className="mt-4 text-sm text-muted-foreground">
-            3 free transcripts daily. No credit card. No judgment for umms.
+            {isPaid
+              ? "No daily cap. Drop files anytime — your desk is waiting."
+              : isLoggedIn
+                ? "Your desk is ready. Upgrade anytime for Unlimited."
+                : "3 free transcripts daily. No credit card. No judgment for umms."}
           </p>
         </div>
 

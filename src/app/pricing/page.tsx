@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PricingGate } from "@/components/pricing-gate";
 import { PricingPlans } from "@/components/pricing-plans";
 import { UnlimitedWelcome } from "@/components/unlimited-welcome";
 
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function PricingPage() {
   return (
-    <>
+    <PricingGate>
       <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sea">
@@ -33,6 +34,6 @@ export default function PricingPage() {
       <div className="border-t border-border/70 bg-white/50">
         <UnlimitedWelcome showCta={false} />
       </div>
-    </>
+    </PricingGate>
   );
 }

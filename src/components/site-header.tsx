@@ -10,9 +10,10 @@ import {
   subscribeToAuth,
   type TalkotypeUser,
 } from "@/lib/auth";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-const navLinks = [
+const baseNavLinks = [
   { href: "/pricing", label: "Pricing" },
   { href: "/faq", label: "FAQ" },
   { href: "/reviews", label: "Reviews" },
@@ -21,17 +22,37 @@ const navLinks = [
 
 export function SiteHeader() {
   const [user, setUser] = useState<TalkotypeUser | null>(null);
+  const [plan, setPlan] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const sync = () => {
-      void getSessionUser().then(setUser);
+    const sync = async () => {
+      const session = await getSessionUser();
+      setUser(session);
+      if (!session || !isSupabaseConfigured()) {
+        setPlan(null);
+        return;
+      }
+      try {
+        const supabase = createClient();
+        const { data } = await supabase
+          .from("profiles")
+          .select("plan")
+          .eq("id", session.id)
+          .maybeSingle();
+        setPlan((data?.plan as string | undefined) ?? "free");
+      } catch {
+        setPlan("free");
+      }
     };
-    sync();
-    window.addEventListener("talkotype-auth", sync);
-    const unsubscribe = subscribeToAuth(sync);
+    const onAuth = () => {
+      void sync();
+    };
+    void sync();
+    window.addEventListener("talkotype-auth", onAuth);
+    const unsubscribe = subscribeToAuth(onAuth);
     return () => {
-      window.removeEventListener("talkotype-auth", sync);
+      window.removeEventListener("talkotype-auth", onAuth);
       unsubscribe();
     };
   }, []);
@@ -39,7 +60,13 @@ export function SiteHeader() {
   async function logout() {
     await clearSession();
     setUser(null);
+    setPlan(null);
   }
+
+  const isPaid = plan === "unlimited";
+  const navLinks = isPaid
+    ? baseNavLinks.filter((link) => link.href !== "/pricing")
+    : baseNavLinks;
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/70 bg-mist/80 backdrop-blur-xl">

@@ -1,5 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Logo } from "@/components/logo";
+import { getSessionUser, subscribeToAuth } from "@/lib/auth";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const footerLinks = [
   { href: "/pricing", label: "Pricing" },
@@ -12,6 +17,43 @@ const footerLinks = [
 ];
 
 export function SiteFooter() {
+  const [isPaid, setIsPaid] = useState(false);
+
+  useEffect(() => {
+    const sync = async () => {
+      const session = await getSessionUser();
+      if (!session || !isSupabaseConfigured()) {
+        setIsPaid(false);
+        return;
+      }
+      try {
+        const supabase = createClient();
+        const { data } = await supabase
+          .from("profiles")
+          .select("plan")
+          .eq("id", session.id)
+          .maybeSingle();
+        setIsPaid(data?.plan === "unlimited");
+      } catch {
+        setIsPaid(false);
+      }
+    };
+    const onAuth = () => {
+      void sync();
+    };
+    void sync();
+    window.addEventListener("talkotype-auth", onAuth);
+    const unsubscribe = subscribeToAuth(onAuth);
+    return () => {
+      window.removeEventListener("talkotype-auth", onAuth);
+      unsubscribe();
+    };
+  }, []);
+
+  const links = isPaid
+    ? footerLinks.filter((link) => link.href !== "/pricing")
+    : footerLinks;
+
   return (
     <footer className="mt-auto border-t border-border/80 bg-white/70">
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-12 sm:px-6 md:flex-row md:items-end md:justify-between">
@@ -33,7 +75,7 @@ export function SiteFooter() {
           </p>
         </div>
         <nav className="flex flex-wrap gap-x-5 gap-y-2">
-          {footerLinks.map((link) => (
+          {links.map((link) => (
             <Link
               key={link.href}
               href={link.href}

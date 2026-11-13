@@ -122,6 +122,7 @@ export function AccountSettings() {
   const [error, setError] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [portalBusy, setPortalBusy] = useState(false);
 
   async function load() {
     const session = await getSessionUser();
@@ -190,6 +191,31 @@ export function AccountSettings() {
   const progress =
     limit && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 100;
   const initial = (account.name || account.email || "T").slice(0, 1).toUpperCase();
+
+  async function openBillingPortal() {
+    setPortalBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/billing/portal", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Could not open billing portal.");
+      }
+      window.location.assign(data.url);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not open billing portal.",
+      );
+      setPortalBusy(false);
+    }
+  }
 
   async function saveDisplayName() {
     if (!account) return;
@@ -300,13 +326,15 @@ export function AccountSettings() {
                 />
               </div>
               {account.plan === "unlimited" ? (
-                <Link
-                  href="/pricing"
-                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold uppercase tracking-wide text-coral transition hover:bg-blush"
+                <button
+                  type="button"
+                  disabled={portalBusy}
+                  onClick={() => void openBillingPortal()}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold uppercase tracking-wide text-coral transition hover:bg-blush disabled:opacity-70"
                 >
                   <InfinityIcon className="size-4" />
-                  Manage plan
-                </Link>
+                  {portalBusy ? "Opening portal…" : "Manage plan"}
+                </button>
               ) : (
                 <PaddleCheckoutButton
                   interval="monthly"

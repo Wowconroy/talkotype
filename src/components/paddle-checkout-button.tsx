@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { loadPaddle } from "@/lib/paddle/browser";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 type Props = {
   interval: "monthly" | "yearly";
@@ -31,6 +32,19 @@ export function PaddleCheckoutButton({
       if (!user) {
         router.push(`/login?next=${encodeURIComponent(loginNext)}`);
         return;
+      }
+
+      if (isSupabaseConfigured()) {
+        const supabase = createClient();
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("plan")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (profile?.plan === "unlimited") {
+          router.push("/account");
+          return;
+        }
       }
 
       const priceId =

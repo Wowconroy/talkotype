@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { Headphones, Sparkles, Timer, Waves } from "lucide-react";
+import { HomeCtaBanner } from "@/components/home-cta-banner";
 import { ReviewsSlider } from "@/components/reviews-slider";
 import { StoryHero } from "@/components/story-hero";
 import { UnlimitedWelcome } from "@/components/unlimited-welcome";
@@ -127,37 +127,11 @@ export default function Home() {
         </div>
       </section>
 
-      <UnlimitedWelcome />
+      <UnlimitedWelcome hideWhenLoggedIn />
 
       <ReviewsSlider />
 
-      <section className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
-        <div className="rounded-[2rem] bg-[linear-gradient(135deg,#123d3a_0%,#1f6f68_48%,#7ec8c3_100%)] px-6 py-12 text-white shadow-[0_30px_60px_rgba(18,61,58,0.18)] sm:px-10 sm:py-14">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-              Ready when your next idea starts mid-sentence
-            </h2>
-            <p className="mt-3 text-base text-white/80">
-              Jump in free. Upgrade later if you fall in love with never typing
-              meeting notes again.
-            </p>
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-              <Link
-                href="/signup"
-                className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-ink transition hover:-translate-y-0.5"
-              >
-                Start for free with Google
-              </Link>
-              <Link
-                href="/signup"
-                className="inline-flex items-center justify-center rounded-full border border-white/35 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10"
-              >
-                Or use email like a classic
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+      <HomeCtaBanner />
     </>
   );
 }
