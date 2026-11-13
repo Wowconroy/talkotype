@@ -379,16 +379,16 @@ function StatusPill({ row }: { row: DeskTranscript }) {
   const label = statusLabel(row);
   const tone =
     row.status === "ready"
-      ? "bg-sea/20 text-ink"
+      ? "bg-emerald-100 text-emerald-800"
       : row.status === "failed"
         ? "bg-coral-soft text-coral"
-        : row.source_kind === "link"
+        : row.source_kind === "link" && row.status === "queued"
           ? "bg-lemon/60 text-ink"
           : "bg-secondary text-ink";
 
   return (
     <span
-      className={`inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${tone}`}
+      className={`inline-flex whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-semibold ${tone}`}
     >
       {label}
     </span>

@@ -60,7 +60,10 @@ function safeName(filename: string) {
   return filename.replace(/[^a-zA-Z0-9._-]+/g, "_") || "audio.bin";
 }
 
-/** Full-file extract to mono 16 kHz FLAC (Groq-friendly). */
+/**
+ * Full-file extract to mono 16 kHz MP3 (small + Groq-friendly).
+ * Prefer MP3 over FLAC so 20–30 min videos stay well under provider limits.
+ */
 export async function extractAudioFile(params: {
   sourceBytes: Uint8Array;
   sourceFilename: string;
@@ -74,7 +77,7 @@ export async function extractAudioFile(params: {
   const dir = join(tmpdir(), "talkotype-extract", randomUUID());
   mkdirSync(dir, { recursive: true });
   const input = join(dir, safeName(params.sourceFilename));
-  const output = join(dir, "audio.flac");
+  const output = join(dir, "audio.mp3");
 
   try {
     writeFileSync(input, Buffer.from(params.sourceBytes));
@@ -90,7 +93,9 @@ export async function extractAudioFile(params: {
       "-ar",
       "16000",
       "-c:a",
-      "flac",
+      "libmp3lame",
+      "-b:a",
+      "64k",
     ];
     if (params.maxSeconds && params.maxSeconds > 0) {
       args.push("-t", String(params.maxSeconds));
@@ -104,8 +109,8 @@ export async function extractAudioFile(params: {
     if (!existsSync(output)) return null;
     return {
       bytes: readFileSync(output),
-      filename: "audio.flac",
-      contentType: "audio/flac",
+      filename: "audio.mp3",
+      contentType: "audio/mpeg",
     };
   } catch {
     return null;

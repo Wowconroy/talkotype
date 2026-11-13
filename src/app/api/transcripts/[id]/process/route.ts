@@ -158,13 +158,16 @@ export async function POST(_request: Request, { params }: Params) {
       bytes.byteLength > GROQ_MAX_UPLOAD_BYTES ||
       (typeof media.size_bytes === "number" &&
         media.size_bytes > GROQ_MAX_UPLOAD_BYTES);
+    // Even mid-size MP4s often fail raw Groq upload from Vercel — always extract.
+    const shouldExtract =
+      videoLike || tooBigForGroq || bytes.byteLength > 20 * 1024 * 1024;
 
     let audioBytes = bytes;
     let audioFilename = filename;
     let audioType = media.content_type || contentType;
 
-    // Videos / oversized uploads must be reduced to mono FLAC before Groq.
-    if (videoLike || tooBigForGroq) {
+    // Videos / oversized uploads → compact mono MP3 before Groq.
+    if (shouldExtract) {
       await admin
         .from("transcription_jobs")
         .update({

@@ -163,31 +163,31 @@ export function formatUploaded(iso: string) {
 }
 
 export function statusLabel(row: DeskTranscript) {
-  if (row.source_kind === "link" && row.status === "queued") {
-    return "Link queued";
-  }
-  if (row.status === "ready") return "Ready";
+  if (row.status === "ready") return "Completed";
   if (row.status === "failed") return "Failed";
 
-  const stage = row.job_stage;
-  if (stage && STAGE_LABELS[stage]) {
-    const pct =
+  // In-flight: only show percent — no intermediate stage names.
+  if (row.status === "processing" || row.status === "queued") {
+    if (
       typeof row.progress_pct === "number" &&
       row.progress_pct > 0 &&
       row.progress_pct < 100
-        ? ` · ${row.progress_pct}%`
-        : "";
-    return `${STAGE_LABELS[stage]}${pct}`;
+    ) {
+      return `${Math.round(row.progress_pct)}%`;
+    }
+    if (row.source_kind === "link" && row.status === "queued") {
+      return "Queued";
+    }
+    if (row.status === "queued") return "Queued";
+    return "1%";
   }
 
-  switch (row.status) {
-    case "queued":
-      return "Queued";
-    case "processing":
-      return "Processing";
-    default:
-      return row.status;
-  }
+  const stage = row.job_stage;
+  if (stage === "failed") return "Failed";
+  if (stage === "ready") return "Completed";
+  if (stage && STAGE_LABELS[stage]) return STAGE_LABELS[stage];
+
+  return row.status;
 }
 
 export function modeLabel(
