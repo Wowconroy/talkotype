@@ -113,6 +113,35 @@ export async function signInWithGoogle() {
   if (error) throw new Error(error.message);
 }
 
+export async function requestPasswordReset(email: string) {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase is not configured yet.");
+  }
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) {
+    throw new Error("Enter the email for your account.");
+  }
+  const supabase = createClient();
+  const origin = window.location.origin;
+  const { error } = await supabase.auth.resetPasswordForEmail(normalized, {
+    redirectTo: `${origin}/auth/callback?next=/reset-password`,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function updatePassword(password: string) {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase is not configured yet.");
+  }
+  if (!password || password.length < 6) {
+    throw new Error("Password must be at least 6 characters.");
+  }
+  const supabase = createClient();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw new Error(error.message);
+  emitAuthEvent();
+}
+
 export async function clearSession() {
   if (!isSupabaseConfigured()) return;
   const supabase = createClient();

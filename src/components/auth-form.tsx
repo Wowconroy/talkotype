@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import {
+  requestPasswordReset,
   signInWithEmail,
   signInWithGoogle,
   signUpWithEmail,
@@ -38,6 +40,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -48,6 +52,13 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     setInfo(null);
     setPending(true);
     try {
+      if (forgotMode) {
+        await requestPasswordReset(email);
+        setInfo(
+          "If an account exists for that email, we sent a reset link. Check your inbox.",
+        );
+        return;
+      }
       if (mode === "signup") {
         const result = await signUpWithEmail(email, password);
         if (result.needsEmailConfirmation) {
@@ -86,33 +97,47 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     <div className="w-full max-w-md rounded-[1.75rem] border border-border/80 bg-white/90 p-7 shadow-[0_24px_60px_rgba(18,61,58,0.08)] backdrop-blur sm:p-8">
       <div className="mb-6 space-y-2 text-center">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sea">
-          {isSignup ? "New here?" : "Welcome back"}
+          {forgotMode
+            ? "Reset access"
+            : isSignup
+              ? "New here?"
+              : "Welcome back"}
         </p>
         <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
-          {isSignup ? "Create your account" : "Log in"}
+          {forgotMode
+            ? "Forgot password"
+            : isSignup
+              ? "Create your account"
+              : "Log in"}
         </h1>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          {isSignup
-            ? "Three free transcripts a day. No credit card required."
-            : "Access your transcripts and account settings."}
+          {forgotMode
+            ? "Enter your email and we’ll send a reset link."
+            : isSignup
+              ? "Three free transcripts a day. No credit card required."
+              : "Access your transcripts and account settings."}
         </p>
       </div>
 
-      <button
-        type="button"
-        onClick={() => void handleGoogle()}
-        disabled={pending}
-        className="flex w-full items-center justify-center gap-3 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:bg-mist disabled:opacity-60"
-      >
-        <GoogleIcon />
-        {isSignup ? "Continue with Google" : "Continue with Google"}
-      </button>
+      {!forgotMode ? (
+        <>
+          <button
+            type="button"
+            onClick={() => void handleGoogle()}
+            disabled={pending}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:bg-mist disabled:opacity-60"
+          >
+            <GoogleIcon />
+            Continue with Google
+          </button>
 
-      <div className="my-5 flex items-center gap-3 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        or email
-        <span className="h-px flex-1 bg-border" />
-      </div>
+          <div className="my-5 flex items-center gap-3 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            or email
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <label className="block space-y-1.5">
@@ -127,18 +152,52 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
             className="w-full rounded-2xl border border-border bg-mist/70 px-4 py-3 text-sm outline-none transition focus:border-sea focus:bg-white focus:ring-4 focus:ring-sea/20"
           />
         </label>
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-ink">Password</span>
-          <input
-            type="password"
-            required
-            autoComplete={isSignup ? "new-password" : "current-password"}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="At least 6 characters"
-            className="w-full rounded-2xl border border-border bg-mist/70 px-4 py-3 text-sm outline-none transition focus:border-sea focus:bg-white focus:ring-4 focus:ring-sea/20"
-          />
-        </label>
+
+        {!forgotMode ? (
+          <label className="block space-y-1.5">
+            <span className="flex items-center justify-between gap-3 text-sm font-medium text-ink">
+              <span>Password</span>
+              {!isSignup ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotMode(true);
+                    setError(null);
+                    setInfo(null);
+                    setShowPassword(false);
+                  }}
+                  className="font-semibold text-coral transition hover:text-[#ff6f5b]"
+                >
+                  Forgot password?
+                </button>
+              ) : null}
+            </span>
+            <span className="relative block">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                autoComplete={isSignup ? "new-password" : "current-password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="At least 6 characters"
+                className="w-full rounded-2xl border border-border bg-mist/70 py-3 pl-4 pr-12 text-sm outline-none transition focus:border-sea focus:bg-white focus:ring-4 focus:ring-sea/20"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-r-2xl text-muted-foreground transition hover:text-ink"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? (
+                  <EyeOff className="size-4" />
+                ) : (
+                  <Eye className="size-4" />
+                )}
+              </button>
+            </span>
+          </label>
+        ) : null}
 
         {error ? (
           <p className="rounded-2xl bg-coral-soft px-3 py-2 text-sm text-coral">
@@ -154,12 +213,30 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           disabled={pending}
           className="w-full rounded-2xl bg-coral px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(255,92,69,0.28)] transition hover:-translate-y-0.5 hover:bg-[#ff6f5b] disabled:opacity-60"
         >
-          {pending ? "One sec…" : isSignup ? "Sign up" : "Log in"}
+          {pending
+            ? "One sec…"
+            : forgotMode
+              ? "Send reset link"
+              : isSignup
+                ? "Sign up"
+                : "Log in"}
         </button>
       </form>
 
       <p className="mt-5 text-center text-sm leading-relaxed text-muted-foreground">
-        {isSignup ? (
+        {forgotMode ? (
+          <button
+            type="button"
+            onClick={() => {
+              setForgotMode(false);
+              setError(null);
+              setInfo(null);
+            }}
+            className="font-semibold text-coral"
+          >
+            Back to log in
+          </button>
+        ) : isSignup ? (
           <>
             By creating an account, you agree to our{" "}
             <Link
