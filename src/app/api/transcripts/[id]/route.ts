@@ -97,6 +97,46 @@ export async function PATCH(request: Request, { params }: Params) {
   return NextResponse.json({ transcript: data });
 }
 
+/** Explicit child wipe when hard_delete_transcript RPC is missing / outdated. */
+async function hardDeleteTranscriptFallback(
+  admin: ReturnType<typeof createAdminClient>,
+  params: { transcriptId: string; userId: string },
+) {
+  const { transcriptId, userId } = params;
+
+  // Break circular FK: transcripts.active_job_id → transcription_jobs.
+  await admin
+    .from("transcripts")
+    .update({ active_job_id: null })
+    .eq("id", transcriptId)
+    .eq("user_id", userId);
+
+  await admin
+    .from("transcription_chunks")
+    .delete()
+    .eq("transcript_id", transcriptId);
+  await admin
+    .from("transcription_jobs")
+    .delete()
+    .eq("transcript_id", transcriptId);
+  await admin
+    .from("transcript_segments")
+    .delete()
+    .eq("transcript_id", transcriptId);
+  await admin
+    .from("transcript_speakers")
+    .delete()
+    .eq("transcript_id", transcriptId);
+  await admin.from("media_assets").delete().eq("transcript_id", transcriptId);
+
+  const { error } = await admin
+    .from("transcripts")
+    .delete()
+    .eq("id", transcriptId)
+    .eq("user_id", userId);
+  if (error) throw new Error(error.message);
+}
+
 export async function DELETE(_request: Request, { params }: Params) {
   const { user } = await requireUser();
   if (!user) {
@@ -116,21 +156,29 @@ export async function DELETE(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const { data: assets } = await admin
-    .from("media_assets")
-    .select("object_key")
-    .eq("transcript_id", id)
-    .eq("user_id", user.id);
+  const [{ data: assets }, { data: chunks }] = await Promise.all([
+    admin
+      .from("media_assets")
+      .select("object_key")
+      .eq("transcript_id", id)
+      .eq("user_id", user.id),
+    admin
+      .from("transcription_chunks")
+      .select("output_object_key")
+      .eq("transcript_id", id),
+  ]);
 
   const objectKeys = [
     ...new Set(
       [
         ...(assets ?? []).map((a) => a.object_key as string),
+        ...(chunks ?? []).map((c) => c.output_object_key as string | null),
         typeof owned.storage_path === "string" ? owned.storage_path : null,
       ].filter((k): k is string => Boolean(k)),
     ),
   ];
 
+  // 1) Wipe object storage (R2) for this transcript prefix + known keys.
   if (isR2Configured()) {
     try {
       await deleteTranscriptStorage({
@@ -139,26 +187,30 @@ export async function DELETE(_request: Request, { params }: Params) {
         objectKeys,
       });
     } catch {
-      // Still remove DB row — orphaned R2 objects are worse than a stuck delete UX.
+      // Still remove DB rows — stuck delete UX is worse than rare orphaned objects.
     }
   }
 
+  // 2) Wipe all related Postgres rows (jobs, chunks, segments, speakers, media, transcript).
   const { data: deletedId, error } = await admin.rpc("hard_delete_transcript", {
     p_transcript_id: id,
   });
 
-  if (error) {
-    // Fallback if migration not applied yet: hard delete via admin client.
-    const { error: delError } = await admin
-      .from("transcripts")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id);
-    if (delError) {
-      return NextResponse.json({ error: delError.message }, { status: 400 });
+  if (error || !deletedId) {
+    try {
+      await hardDeleteTranscriptFallback(admin, {
+        transcriptId: id,
+        userId: user.id,
+      });
+    } catch (err) {
+      return NextResponse.json(
+        {
+          error:
+            err instanceof Error ? err.message : "Could not delete transcript",
+        },
+        { status: 400 },
+      );
     }
-  } else if (!deletedId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const today = new Date().toISOString().slice(0, 10);
