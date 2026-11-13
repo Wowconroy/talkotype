@@ -3,25 +3,36 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Download, InfinityIcon } from "lucide-react";
+import { clearSession, getSessionUser, type TalkotypeUser } from "@/lib/auth";
 import {
-  Download,
-  InfinityIcon,
-  Mail,
-} from "lucide-react";
-import {
-  FREE_DAILY_LIMIT,
-  changeEmailLocal,
-  deleteAccountLocal,
-  ensureAccount,
-  updateNotifications,
-  type AccountRecord,
-} from "@/lib/account-settings";
-import {
-  clearSession,
-  getSessionUser,
-  type TalkotypeUser,
-} from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
+  resolveDisplayName,
+  setCachedDisplayName,
+} from "@/lib/display-name";
+import { createClient } from "@/lib/supabase/client";
+import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
+
+const FREE_DAILY_LIMIT = 3;
+
+type AccountView = {
+  email: string;
+  name: string;
+  provider: TalkotypeUser["provider"];
+  plan: "free" | "unlimited";
+  billingInterval: "monthly" | "yearly" | "none";
+  dailyUsed: number;
+  notifications: {
+    completedTranscripts: boolean;
+    freeQuotaResets: boolean;
+    productUpdates: boolean;
+  };
+  invoices: Array<{
+    id: string;
+    label: string;
+    amountLabel: string;
+    url?: string | null;
+  }>;
+};
 
 function Toggle({
   checked,
@@ -52,43 +63,118 @@ function Toggle({
   );
 }
 
+function mapAccountPayload(payload: {
+  profile: {
+    email: string;
+    display_name?: string | null;
+    provider?: string;
+    plan?: string;
+    billing_interval?: string;
+  };
+  notifications: {
+    completed_transcripts: boolean;
+    free_quota_resets: boolean;
+    product_updates: boolean;
+  };
+  dailyUsage: { transcripts_used: number };
+  invoices: Array<{
+    id: string;
+    label?: string | null;
+    amount_cents: number;
+    currency: string;
+    invoice_url?: string | null;
+  }>;
+}): AccountView {
+  return {
+    email: payload.profile.email,
+    name: payload.profile.display_name || payload.profile.email.split("@")[0],
+    provider: payload.profile.provider === "google" ? "google" : "email",
+    plan: payload.profile.plan === "unlimited" ? "unlimited" : "free",
+    billingInterval:
+      payload.profile.billing_interval === "yearly" ||
+      payload.profile.billing_interval === "monthly"
+        ? payload.profile.billing_interval
+        : "none",
+    dailyUsed: payload.dailyUsage.transcripts_used ?? 0,
+    notifications: {
+      completedTranscripts: payload.notifications.completed_transcripts,
+      freeQuotaResets: payload.notifications.free_quota_resets,
+      productUpdates: payload.notifications.product_updates,
+    },
+    invoices: (payload.invoices ?? []).map((invoice) => ({
+      id: invoice.id,
+      label: invoice.label || "Invoice",
+      amountLabel: `${(invoice.amount_cents / 100).toLocaleString("en-US", {
+        style: "currency",
+        currency: (invoice.currency || "usd").toUpperCase(),
+      })}`,
+      url: invoice.invoice_url,
+    })),
+  };
+}
+
 export function AccountSettings() {
   const router = useRouter();
   const [user, setUser] = useState<TalkotypeUser | null>(null);
-  const [account, setAccount] = useState<AccountRecord | null>(null);
+  const [account, setAccount] = useState<AccountView | null>(null);
   const [ready, setReady] = useState(false);
-  const [emailDraft, setEmailDraft] = useState("");
-  const [editingEmail, setEditingEmail] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
-  useEffect(() => {
-    const session = getSessionUser();
+  async function load() {
+    const session = await getSessionUser();
     if (!session) {
-      router.replace("/login");
+      router.replace("/login?next=/account");
       return;
     }
-    const record = ensureAccount(session);
     setUser(session);
-    setAccount(record);
-    setEmailDraft(record.email);
+    const cachedName = resolveDisplayName(session.id, session.name);
+    // Paint shell immediately with cached profile name (no email flash).
+    const shell: AccountView = {
+      email: session.email,
+      name: cachedName,
+      provider: session.provider,
+      plan: "free",
+      billingInterval: "none",
+      dailyUsed: 0,
+      notifications: {
+        completedTranscripts: true,
+        freeQuotaResets: true,
+        productUpdates: true,
+      },
+      invoices: [],
+    };
+    setAccount(shell);
+    setNameDraft(shell.name);
     setReady(true);
 
-    const sync = () => {
-      const next = getSessionUser();
-      if (!next) {
-        router.replace("/login");
-        return;
+    const res = await fetch("/api/account", { credentials: "same-origin" });
+    if (!res.ok) {
+      setError("Could not load account.");
+      return;
+    }
+    const payload = await res.json();
+    const mapped = mapAccountPayload(payload);
+    setCachedDisplayName(session.id, mapped.name);
+    setAccount(mapped);
+    setNameDraft(mapped.name);
+  }
+
+  useEffect(() => {
+    void load().then(() => {
+      if (typeof window === "undefined") return;
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("upgraded") === "1") {
+        setMessage(
+          "Thanks — if Paddle confirms the payment, Unlimited unlocks within a few seconds. Refresh if the plan hasn’t flipped yet.",
+        );
+        window.history.replaceState({}, "", "/account");
+        // Webhook may land just after redirect — re-fetch once.
+        window.setTimeout(() => void load(), 2500);
       }
-      setUser(next);
-      setAccount(ensureAccount(next));
-    };
-    window.addEventListener("talkotype-auth", sync);
-    window.addEventListener("talkotype-account", sync);
-    return () => {
-      window.removeEventListener("talkotype-auth", sync);
-      window.removeEventListener("talkotype-account", sync);
-    };
+    });
   }, [router]);
 
   if (!ready || !user || !account) {
@@ -105,41 +191,66 @@ export function AccountSettings() {
     limit && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 100;
   const initial = (account.name || account.email || "T").slice(0, 1).toUpperCase();
 
-  function refresh() {
-    const session = getSessionUser();
-    if (!session) return;
-    setAccount(ensureAccount(session));
-    setUser(session);
-  }
-
-  function saveNotification(
-    key: keyof AccountRecord["notifications"],
-    value: boolean,
-  ) {
-    updateNotifications(user!.id, { [key]: value });
-    refresh();
-  }
-
-  function handleChangeEmail() {
+  async function saveDisplayName() {
+    if (!account) return;
+    const next = nameDraft.trim().replace(/\s+/g, " ");
+    if (!next || next === account.name) return;
+    setSavingName(true);
     setError(null);
     setMessage(null);
-    try {
-      changeEmailLocal(user!.id, emailDraft);
-      setEditingEmail(false);
-      setMessage("Email updated.");
-      refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update email.");
+    const res = await fetch("/api/account", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ display_name: next }),
+    });
+    setSavingName(false);
+    if (!res.ok) {
+      setError("Could not save your name.");
+      return;
+    }
+    const payload = await res.json();
+    const name =
+      payload.profile?.display_name ||
+      next;
+    if (user) setCachedDisplayName(user.id, name);
+    setAccount({ ...account, name });
+    setNameDraft(name);
+    setMessage("Name updated.");
+  }
+
+  async function saveNotification(
+    key: keyof AccountView["notifications"],
+    value: boolean,
+  ) {
+    if (!account) return;
+    const next = {
+      ...account.notifications,
+      [key]: value,
+    };
+    setAccount({ ...account, notifications: next });
+    const res = await fetch("/api/account/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        completed_transcripts: next.completedTranscripts,
+        free_quota_resets: next.freeQuotaResets,
+        product_updates: next.productUpdates,
+      }),
+    });
+    if (!res.ok) {
+      setError("Could not save notification settings.");
+      void load();
     }
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     const ok = window.confirm(
-      "Delete your Talkotype account? This clears your local account data and signs you out.",
+      "Delete your Talkotype account? This signs you out. Contact support if you need full data erasure.",
     );
     if (!ok) return;
-    deleteAccountLocal(user!.id);
-    clearSession();
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    await clearSession();
     router.replace("/");
   }
 
@@ -162,14 +273,6 @@ export function AccountSettings() {
             Account Settings
           </h1>
 
-          {!isSupabaseConfigured() ? (
-            <p className="mt-3 rounded-xl bg-lemon/70 px-3 py-2 text-center text-xs leading-relaxed text-ink/80">
-              Settings are saved on this device for now. Connect the new
-              Talkotype Supabase project to sync accounts, invoices, and
-              transcripts across devices.
-            </p>
-          ) : null}
-
           <section className="mt-8">
             <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Your Plan
@@ -185,8 +288,8 @@ export function AccountSettings() {
                     {account.plan === "free"
                       ? `${used} of ${FREE_DAILY_LIMIT} daily transcriptions used.`
                       : account.billingInterval === "yearly"
-                        ? "$14 / month · billed yearly"
-                        : "$20 / month · billed monthly"}
+                        ? "$14 / month · billed yearly via Paddle"
+                        : "$20 / month · billed monthly via Paddle"}
                   </p>
                 </div>
               </div>
@@ -196,37 +299,52 @@ export function AccountSettings() {
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <Link
-                href="/pricing"
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold uppercase tracking-wide text-coral transition hover:bg-blush"
-              >
-                <InfinityIcon className="size-4" />
-                {account.plan === "unlimited" ? "Manage plan" : "Go Unlimited"}
-              </Link>
+              {account.plan === "unlimited" ? (
+                <Link
+                  href="/pricing"
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold uppercase tracking-wide text-coral transition hover:bg-blush"
+                >
+                  <InfinityIcon className="size-4" />
+                  Manage plan
+                </Link>
+              ) : (
+                <PaddleCheckoutButton
+                  interval="monthly"
+                  loginNext="/account"
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold uppercase tracking-wide text-coral transition hover:bg-blush disabled:opacity-70"
+                >
+                  <InfinityIcon className="size-4" />
+                  Go Unlimited
+                </PaddleCheckoutButton>
+              )}
             </div>
 
             <div className="mt-3">
               {account.invoices.length === 0 ? (
                 <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
                   <Download className="size-4" />
-                  No invoices yet — they appear after Unlimited billing.
+                  No invoices yet — they appear after Unlimited billing (Paddle).
                 </p>
               ) : (
                 <ul className="space-y-2">
                   {account.invoices.map((invoice) => (
                     <li key={invoice.id}>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-2 text-sm font-semibold text-coral hover:underline"
-                        onClick={() =>
-                          setMessage(
-                            `Invoice “${invoice.label}” (${invoice.amountLabel}) is ready once Stripe is connected.`,
-                          )
-                        }
-                      >
-                        <Download className="size-4" />
-                        Download invoice · {invoice.amountLabel}
-                      </button>
+                      {invoice.url ? (
+                        <a
+                          href={invoice.url}
+                          className="inline-flex items-center gap-2 text-sm font-semibold text-coral hover:underline"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Download className="size-4" />
+                          Download invoice · {invoice.amountLabel}
+                        </a>
+                      ) : (
+                        <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+                          <Download className="size-4" />
+                          {invoice.label} · {invoice.amountLabel}
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -236,7 +354,7 @@ export function AccountSettings() {
 
           <section className="mt-8">
             <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Email Address
+              Profile
             </h2>
             <div className="mt-3 rounded-2xl bg-mist px-4 py-4">
               <div className="flex items-center gap-3">
@@ -254,64 +372,42 @@ export function AccountSettings() {
                 </div>
               </div>
 
-              {editingEmail ? (
-                <div className="mt-4 space-y-2">
-                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    New email
-                    <input
-                      value={emailDraft}
-                      onChange={(event) => setEmailDraft(event.target.value)}
-                      className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2 text-sm text-ink outline-none ring-coral/30 focus:ring-2"
-                      type="email"
-                    />
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleChangeEmail}
-                      className="rounded-full bg-coral px-4 py-2 text-sm font-semibold text-white"
-                    >
-                      Save email
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingEmail(false);
-                        setEmailDraft(account.email);
-                      }}
-                      className="rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-ink"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold text-coral">
+              <label className="mt-4 block">
+                <span className="text-sm font-semibold text-ink">
+                  Display name
+                </span>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    value={nameDraft}
+                    maxLength={80}
+                    onChange={(event) => setNameDraft(event.target.value)}
+                    className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm text-ink outline-none ring-coral/30 focus:ring-2"
+                    placeholder="How should we greet you?"
+                  />
                   <button
                     type="button"
-                    className="hover:underline"
-                    onClick={() =>
-                      setMessage(
-                        account.provider === "google"
-                          ? "Password login arrives with Supabase Auth — Google stays available."
-                          : "You’re already on password login.",
-                      )
+                    disabled={
+                      savingName ||
+                      !nameDraft.trim() ||
+                      nameDraft.trim() === account.name
                     }
+                    onClick={() => void saveDisplayName()}
+                    className="shrink-0 rounded-xl bg-coral px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ff6f5b] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {account.provider === "google"
-                      ? "Switch to Password Login"
-                      : "Password login active"}
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 hover:underline"
-                    onClick={() => setEditingEmail(true)}
-                  >
-                    <Mail className="size-3.5" />
-                    Change Email
+                    {savingName ? "Saving…" : "Save"}
                   </button>
                 </div>
-              )}
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Shown in your desk greeting. You can change it anytime.
+                </p>
+              </label>
+              {message ? (
+                <p className="mt-2 text-sm font-medium text-sea">{message}</p>
+              ) : null}
+              {error ? (
+                <p className="mt-2 text-sm font-medium text-coral">{error}</p>
+              ) : null}
             </div>
           </section>
 
@@ -352,7 +448,7 @@ export function AccountSettings() {
                   <Toggle
                     checked={account.notifications[item.key]}
                     label={item.title}
-                    onChange={(value) => saveNotification(item.key, value)}
+                    onChange={(value) => void saveNotification(item.key, value)}
                   />
                 </li>
               ))}
@@ -379,7 +475,7 @@ export function AccountSettings() {
           </Link>
           <button
             type="button"
-            onClick={handleDelete}
+            onClick={() => void handleDelete()}
             className="text-sm font-semibold text-muted-foreground hover:text-coral"
           >
             Delete Account

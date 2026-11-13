@@ -39,34 +39,43 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setInfo(null);
     setPending(true);
     try {
       if (mode === "signup") {
-        signUpWithEmail(email, password);
+        const result = await signUpWithEmail(email, password);
+        if (result.needsEmailConfirmation) {
+          setInfo("Check your email to confirm your account, then log in.");
+          return;
+        }
       } else {
-        signInWithEmail(email, password);
+        await signInWithEmail(email, password);
       }
-      router.push("/app");
+      const nextParam = new URLSearchParams(window.location.search).get("next");
+      const next =
+        nextParam && nextParam.startsWith("/") ? nextParam : "/app";
+      router.push(next);
+      router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went sideways.");
+      setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setPending(false);
     }
   }
 
-  function handleGoogle() {
+  async function handleGoogle() {
     setError(null);
     setPending(true);
     try {
-      signInWithGoogle();
-      router.push("/app");
+      await signInWithGoogle();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Google shrugged. Try again?");
+      setError(err instanceof Error ? err.message : "Google sign-in failed.");
       setPending(false);
     }
   }
@@ -80,28 +89,28 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           {isSignup ? "New here?" : "Welcome back"}
         </p>
         <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
-          {isSignup ? "Join the talk party" : "Slip back in"}
+          {isSignup ? "Create your account" : "Log in"}
         </h1>
         <p className="text-sm leading-relaxed text-muted-foreground">
           {isSignup
-            ? "Three free transcripts a day. No credit card. No vibes check."
-            : "Your transcripts missed you. Or maybe they didn’t. Either way — hi."}
+            ? "Three free transcripts a day. No credit card required."
+            : "Access your transcripts and account settings."}
         </p>
       </div>
 
       <button
         type="button"
-        onClick={handleGoogle}
+        onClick={() => void handleGoogle()}
         disabled={pending}
         className="flex w-full items-center justify-center gap-3 rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:bg-mist disabled:opacity-60"
       >
         <GoogleIcon />
-        {isSignup ? "Start for free with Google" : "Continue with Google"}
+        {isSignup ? "Continue with Google" : "Continue with Google"}
       </button>
 
       <div className="my-5 flex items-center gap-3 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
         <span className="h-px flex-1 bg-border" />
-        or the classic way
+        or email
         <span className="h-px flex-1 bg-border" />
       </div>
 
@@ -114,7 +123,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
             autoComplete="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@somewhere.fun"
+            placeholder="you@example.com"
             className="w-full rounded-2xl border border-border bg-mist/70 px-4 py-3 text-sm outline-none transition focus:border-sea focus:bg-white focus:ring-4 focus:ring-sea/20"
           />
         </label>
@@ -126,7 +135,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
             autoComplete={isSignup ? "new-password" : "current-password"}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="At least 6 characters of mystery"
+            placeholder="At least 6 characters"
             className="w-full rounded-2xl border border-border bg-mist/70 px-4 py-3 text-sm outline-none transition focus:border-sea focus:bg-white focus:ring-4 focus:ring-sea/20"
           />
         </label>
@@ -135,6 +144,9 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           <p className="rounded-2xl bg-coral-soft px-3 py-2 text-sm text-coral">
             {error}
           </p>
+        ) : null}
+        {info ? (
+          <p className="rounded-2xl bg-sea/10 px-3 py-2 text-sm text-ink">{info}</p>
         ) : null}
 
         <button
@@ -150,11 +162,17 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         {isSignup ? (
           <>
             By creating an account, you agree to our{" "}
-            <Link href="/terms" className="font-medium text-ink underline decoration-sea/60 underline-offset-2">
+            <Link
+              href="/terms"
+              className="font-medium text-ink underline decoration-sea/60 underline-offset-2"
+            >
               Terms of Service
             </Link>{" "}
             and{" "}
-            <Link href="/privacy" className="font-medium text-ink underline decoration-sea/60 underline-offset-2">
+            <Link
+              href="/privacy"
+              className="font-medium text-ink underline decoration-sea/60 underline-offset-2"
+            >
               Privacy Policy
             </Link>
             .

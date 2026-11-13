@@ -12,7 +12,7 @@ Unresolved facts and decisions that must be confirmed before treating `/terms` a
 | Transcription | Not implemented | AssemblyAI / Whisper / other provider account settings |
 | Storage of originals | Not implemented | Cloudflare R2 or other; seven-day auto-delete of originals |
 | Transcript storage | Schema drafted for Supabase; **no Talkotype Supabase project created** | Live DB, RLS, backups |
-| Payments | Pricing UI only ($20/mo or $14/mo yearly / $168) | Stripe (or other), invoices, tax, refunds automation |
+| Payments | Pricing UI only ($20/mo or $14/mo yearly / $168) | Paddle Billing, invoices, tax, refunds automation |
 | Email product | Contact addresses in copy | Confirmed mailbox ownership / support tooling |
 | Analytics | No first-party analytics SDK in app code | Vercel Analytics / Speed Insights enabled in dashboard |
 | Cookies | Session/account data in `localStorage` | Cookie banner / consent tooling |

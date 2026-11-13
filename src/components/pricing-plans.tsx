@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { InfinityIcon, Mic, Rocket, Sparkles, Zap } from "lucide-react";
+import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
 
 type Billing = "monthly" | "yearly";
 
@@ -186,7 +187,7 @@ export function PricingPlans() {
               {isYearly ? (
                 <>
                   <p className="flex flex-wrap items-center gap-2 text-sm text-white/90">
-                    <span>{money(yearlyBilled)} billed yearly</span>
+                    <span>{money(yearlyBilled)} billed yearly + tax</span>
                     <span className="rounded-md bg-[#2db87c] px-2 py-0.5 text-[11px] font-bold tracking-wide text-white">
                       SAVE 30%
                     </span>
@@ -198,7 +199,7 @@ export function PricingPlans() {
                 </>
               ) : (
                 <p className="text-sm text-white/80">
-                  {money(MONTHLY_PRICE)} billed monthly
+                  {money(MONTHLY_PRICE)} billed monthly + tax
                 </p>
               )}
             </div>
@@ -228,13 +229,20 @@ export function PricingPlans() {
             ))}
           </ul>
 
-          <Link
-            href="/signup"
-            className="relative mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-bold uppercase tracking-wide text-coral shadow-[0_14px_28px_rgba(18,61,58,0.12)] transition hover:-translate-y-0.5 hover:bg-blush"
+          <PaddleCheckoutButton
+            interval={billing}
+            loginNext="/pricing"
+            className="relative mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-bold uppercase tracking-wide text-coral shadow-[0_14px_28px_rgba(18,61,58,0.12)] transition hover:-translate-y-0.5 hover:bg-blush disabled:opacity-70"
           >
             <InfinityIcon className="size-4" />
             Go Unlimited
-          </Link>
+          </PaddleCheckoutButton>
+          {(process.env.NEXT_PUBLIC_PADDLE_ENV ?? "sandbox") !==
+          "production" ? (
+            <p className="relative mt-2 text-center text-[11px] text-white/75">
+              Sandbox checkout — use Paddle test cards, no real charge.
+            </p>
+          ) : null}
         </article>
       </div>
     </div>

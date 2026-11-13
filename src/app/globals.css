@@ -203,13 +203,93 @@
   }
 }
 
+@keyframes folder-yarn-bounce {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  30% {
+    transform: translate(-10px, -10px) rotate(-22deg);
+  }
+  55% {
+    transform: translate(6px, -2px) rotate(14deg);
+  }
+  75% {
+    transform: translate(-2px, -6px) rotate(-8deg);
+  }
+}
+
+@keyframes folder-paw-bat {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  30% {
+    transform: translate(8px, -2px) rotate(10deg);
+  }
+  50% {
+    transform: translate(14px, 2px) rotate(18deg);
+  }
+  70% {
+    transform: translate(4px, 0) rotate(4deg);
+  }
+}
+
+@keyframes folder-tail-swish {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(10deg);
+  }
+}
+
+@keyframes folder-head-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.folder-yarn-ball {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: folder-yarn-bounce 1.8s ease-in-out infinite;
+}
+
+.folder-cat-paw {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: folder-paw-bat 1.8s ease-in-out infinite;
+}
+
+.folder-cat-tail {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: folder-tail-swish 2.4s ease-in-out infinite;
+}
+
+.folder-cat-head {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: folder-head-bob 2.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
   .animate-rise-delay,
   .animate-rise-delay-2,
   .animate-float,
   .animate-wiggle,
-  .animate-reviews-marquee {
+  .animate-reviews-marquee,
+  .folder-yarn-ball,
+  .folder-cat-paw,
+  .folder-cat-tail,
+  .folder-cat-head {
     animation: none !important;
   }
 }

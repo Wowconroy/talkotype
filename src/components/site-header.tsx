@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Logo } from "@/components/logo";
-import { clearSession, getSessionUser, type TalkotypeUser } from "@/lib/auth";
+import {
+  clearSession,
+  getSessionUser,
+  subscribeToAuth,
+  type TalkotypeUser,
+} from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
@@ -19,15 +24,22 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const sync = () => setUser(getSessionUser());
+    const sync = () => {
+      void getSessionUser().then(setUser);
+    };
     sync();
     window.addEventListener("talkotype-auth", sync);
-    window.addEventListener("storage", sync);
+    const unsubscribe = subscribeToAuth(sync);
     return () => {
       window.removeEventListener("talkotype-auth", sync);
-      window.removeEventListener("storage", sync);
+      unsubscribe();
     };
   }, []);
+
+  async function logout() {
+    await clearSession();
+    setUser(null);
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/70 bg-mist/80 backdrop-blur-xl">
@@ -47,12 +59,6 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Link
-            href="/signup"
-            className="rounded-full bg-lemon px-3.5 py-1.5 text-sm font-semibold text-ink shadow-[0_0_0_1px_rgba(18,61,58,0.06)] transition hover:-translate-y-0.5 hover:shadow-md"
-          >
-            Try for free
-          </Link>
           {user ? (
             <>
               <Link
@@ -69,10 +75,7 @@ export function SiteHeader() {
               </Link>
               <button
                 type="button"
-                onClick={() => {
-                  clearSession();
-                  setUser(null);
-                }}
+                onClick={() => void logout()}
                 className="rounded-full border border-border bg-white px-3.5 py-1.5 text-sm font-medium text-ink transition hover:bg-secondary"
               >
                 Log out
@@ -80,6 +83,12 @@ export function SiteHeader() {
             </>
           ) : (
             <>
+              <Link
+                href="/signup"
+                className="rounded-full bg-lemon px-3.5 py-1.5 text-sm font-semibold text-ink shadow-[0_0_0_1px_rgba(18,61,58,0.06)] transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                Try for free
+              </Link>
               <Link
                 href="/login"
                 className="rounded-full px-3 py-1.5 text-sm font-medium text-ink/80 hover:bg-white/70"
@@ -123,13 +132,6 @@ export function SiteHeader() {
               {link.label}
             </Link>
           ))}
-          <Link
-            href="/signup"
-            onClick={() => setOpen(false)}
-            className="rounded-xl bg-lemon px-3 py-2 text-center text-sm font-semibold text-ink"
-          >
-            Try for free
-          </Link>
           {user ? (
             <>
               <Link
@@ -149,8 +151,7 @@ export function SiteHeader() {
               <button
                 type="button"
                 onClick={() => {
-                  clearSession();
-                  setUser(null);
+                  void logout();
                   setOpen(false);
                 }}
                 className="rounded-xl px-3 py-2 text-sm font-medium text-ink/70"

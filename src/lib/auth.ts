@@ -1,3 +1,6 @@
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { clearCachedDisplayName } from "@/lib/display-name";
+
 export type TalkotypeUser = {
   id: string;
   email: string;
@@ -6,116 +9,125 @@ export type TalkotypeUser = {
   createdAt: string;
 };
 
-type StoredUser = TalkotypeUser & {
-  passwordHash?: string;
-};
-
-const USERS_KEY = "talkotype_users";
-const SESSION_KEY = "talkotype_session";
-
-function canUseStorage() {
-  return typeof window !== "undefined" && !!window.localStorage;
+function mapUser(user: {
+  id: string;
+  email?: string | null;
+  created_at?: string;
+  app_metadata?: { provider?: string };
+  user_metadata?: { full_name?: string; name?: string };
+}): TalkotypeUser {
+  const provider =
+    user.app_metadata?.provider === "google" ? "google" : "email";
+  const email = user.email ?? "";
+  return {
+    id: user.id,
+    email,
+    name:
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      email.split("@")[0] ||
+      "Friend",
+    provider,
+    createdAt: user.created_at ?? new Date().toISOString(),
+  };
 }
 
-function readUsers(): StoredUser[] {
-  if (!canUseStorage()) return [];
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    return raw ? (JSON.parse(raw) as StoredUser[]) : [];
-  } catch {
-    return [];
+function emitAuthEvent() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("talkotype-auth"));
   }
 }
 
-function writeUsers(users: StoredUser[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-function simpleHash(value: string) {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
+export async function getSessionUser(): Promise<TalkotypeUser | null> {
+  if (!isSupabaseConfigured()) return null;
+  const supabase = createClient();
+  // Prefer local session for snappy UI; fall back to Auth API verify.
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData.session?.user) {
+    return mapUser(sessionData.session.user);
   }
-  return `h${Math.abs(hash)}`;
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+  return mapUser(data.user);
 }
 
-function toPublicUser(user: StoredUser): TalkotypeUser {
-  const { passwordHash: _passwordHash, ...publicUser } = user;
-  return publicUser;
-}
-
-export function getSessionUser(): TalkotypeUser | null {
-  if (!canUseStorage()) return null;
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as TalkotypeUser) : null;
-  } catch {
-    return null;
+export async function signUpWithEmail(email: string, password: string) {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase is not configured yet.");
   }
-}
-
-export function setSessionUser(user: TalkotypeUser) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-  window.dispatchEvent(new Event("talkotype-auth"));
-}
-
-export function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-  window.dispatchEvent(new Event("talkotype-auth"));
-}
-
-export function signUpWithEmail(email: string, password: string) {
   const normalized = email.trim().toLowerCase();
   if (!normalized || !password) {
-    throw new Error("Email and password please — we're friendly, not psychic.");
+    throw new Error("Email and password are required.");
   }
   if (password.length < 6) {
-    throw new Error("Make that password at least 6 characters. Future you will thank you.");
+    throw new Error("Password must be at least 6 characters.");
   }
 
-  const users = readUsers();
-  if (users.some((user) => user.email === normalized)) {
-    throw new Error("That email already has a seat. Try logging in instead.");
-  }
-
-  const user: StoredUser = {
-    id: crypto.randomUUID(),
+  const supabase = createClient();
+  const origin = window.location.origin;
+  const { data, error } = await supabase.auth.signUp({
     email: normalized,
-    name: normalized.split("@")[0] || "Friend",
-    provider: "email",
-    createdAt: new Date().toISOString(),
-    passwordHash: simpleHash(password),
-  };
-
-  writeUsers([...users, user]);
-  const publicUser = toPublicUser(user);
-  setSessionUser(publicUser);
-  return publicUser;
-}
-
-export function signInWithEmail(email: string, password: string) {
-  const normalized = email.trim().toLowerCase();
-  const users = readUsers();
-  const match = users.find((user) => user.email === normalized);
-
-  if (!match || match.passwordHash !== simpleHash(password)) {
-    throw new Error("Hmm, that combo didn't match. Want to try again?");
+    password,
+    options: {
+      emailRedirectTo: `${origin}/auth/callback`,
+    },
+  });
+  if (error) throw new Error(error.message);
+  if (data.user) {
+    emitAuthEvent();
+    return {
+      user: mapUser(data.user),
+      needsEmailConfirmation: !data.session,
+    };
   }
-
-  const publicUser = toPublicUser(match);
-  setSessionUser(publicUser);
-  return publicUser;
+  throw new Error("Could not create account.");
 }
 
-export function signInWithGoogle() {
-  const user: TalkotypeUser = {
-    id: crypto.randomUUID(),
-    email: `friend-${Date.now().toString().slice(-6)}@gmail.com`,
-    name: "Google Friend",
+export async function signInWithEmail(email: string, password: string) {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase is not configured yet.");
+  }
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  });
+  if (error) throw new Error(error.message);
+  if (!data.user) throw new Error("Could not sign in.");
+  emitAuthEvent();
+  return mapUser(data.user);
+}
+
+export async function signInWithGoogle() {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase is not configured yet.");
+  }
+  const supabase = createClient();
+  const origin = window.location.origin;
+  const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    createdAt: new Date().toISOString(),
-  };
-  setSessionUser(user);
-  return user;
+    options: {
+      redirectTo: `${origin}/auth/callback?next=/app`,
+    },
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function clearSession() {
+  if (!isSupabaseConfigured()) return;
+  const supabase = createClient();
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id;
+  await supabase.auth.signOut();
+  if (userId) clearCachedDisplayName(userId);
+  emitAuthEvent();
+}
+
+export function subscribeToAuth(callback: () => void) {
+  if (!isSupabaseConfigured()) return () => undefined;
+  const supabase = createClient();
+  const { data } = supabase.auth.onAuthStateChange(() => {
+    callback();
+  });
+  return () => data.subscription.unsubscribe();
 }
