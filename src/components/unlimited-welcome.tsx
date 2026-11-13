@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import {
+  ArrowRight,
   Briefcase,
   Flame,
   HardDrive,
@@ -7,6 +10,7 @@ import {
   Rocket,
   Volume2,
 } from "lucide-react";
+import { useViewerPlan } from "@/lib/use-viewer-plan";
 
 const perks = [
   {
@@ -52,6 +56,8 @@ export function UnlimitedWelcome({
 }: {
   showCta?: boolean;
 }) {
+  const { isPaid, ready } = useViewerPlan();
+
   return (
     <section className="relative overflow-hidden">
       <div
@@ -94,19 +100,37 @@ export function UnlimitedWelcome({
 
         {showCta ? (
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link
-              href="/signup"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-coral px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(255,92,69,0.28)] transition hover:-translate-y-0.5 hover:bg-[#ff6f5b]"
-            >
-              <InfinityIcon className="size-4" />
-              Go Unlimited
-            </Link>
-            <Link
-              href="/pricing"
-              className="inline-flex items-center justify-center rounded-full border border-border bg-white/90 px-6 py-3.5 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:bg-white"
-            >
-              Compare plans
-            </Link>
+            {!ready ? (
+              <div
+                aria-hidden
+                className="h-12 w-56 animate-pulse rounded-full bg-mist"
+              />
+            ) : isPaid ? (
+              <Link
+                href="/app"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-coral px-6 py-3.5 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(255,92,69,0.28)] transition hover:-translate-y-0.5 hover:bg-[#ff6f5b]"
+              >
+                <InfinityIcon className="size-4" />
+                Hurray — you’re Unlimited
+                <ArrowRight className="size-4" />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-coral px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(255,92,69,0.28)] transition hover:-translate-y-0.5 hover:bg-[#ff6f5b]"
+                >
+                  <InfinityIcon className="size-4" />
+                  Go Unlimited
+                </Link>
+                <Link
+                  href="/pricing"
+                  className="inline-flex items-center justify-center rounded-full border border-border bg-white/90 px-6 py-3.5 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:bg-white"
+                >
+                  Compare plans
+                </Link>
+              </>
+            )}
           </div>
         ) : null}
       </div>
