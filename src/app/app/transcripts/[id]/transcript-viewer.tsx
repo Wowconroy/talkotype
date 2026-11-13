@@ -185,7 +185,7 @@ export function TranscriptViewer({ id }: { id: string }) {
   async function downloadFormat(format: string, timestamps = showTimestamps) {
     if (row?.status !== "ready" || !(text || "").trim()) {
       setError(
-        "Transcript is still processing. Wait until status is Ready, then export.",
+        "Transcript is still processing. Wait until status is Completed, then export.",
       );
       return;
     }
