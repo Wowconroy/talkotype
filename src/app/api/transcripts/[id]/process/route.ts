@@ -134,39 +134,69 @@ export async function POST(_request: Request, { params }: Params) {
     );
   }
 
-  await admin
-    .from("transcription_jobs")
-    .update({
-      status: "processing",
-      stage: "preparing_audio",
-      progress_pct: 10,
-      attempt_count: (job?.attempt_count ?? 0) + 1,
-      started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      error_message: null,
-      error_code: null,
-    })
-    .eq("id", transcript.active_job_id);
+  const jobId = transcript.active_job_id as string;
+  let lastReportedPct = 5;
 
-  await admin
-    .from("transcripts")
-    .update({ status: "processing", updated_at: new Date().toISOString() })
-    .eq("id", id);
+  const reportProgress = async (pct: number, stage?: string) => {
+    const next = Math.max(lastReportedPct, Math.min(99, Math.round(pct)));
+    // Only write when % advances (avoids hammering Supabase during ticks).
+    if (next <= lastReportedPct) return;
+    lastReportedPct = next;
+    await admin
+      .from("transcription_jobs")
+      .update({
+        progress_pct: next,
+        ...(stage ? { stage } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId);
+  };
+
+  await Promise.all([
+    admin
+      .from("transcription_jobs")
+      .update({
+        status: "processing",
+        stage: "downloading",
+        progress_pct: 5,
+        attempt_count: (job?.attempt_count ?? 0) + 1,
+        started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        error_message: null,
+        error_code: null,
+      })
+      .eq("id", jobId),
+    admin
+      .from("transcripts")
+      .update({ status: "processing", updated_at: new Date().toISOString() })
+      .eq("id", id),
+  ]);
 
   try {
-    const { bytes, contentType } = await getObjectBytes(media.object_key);
-
     const filename =
       transcript.source_filename ||
       media.object_key.split("/").pop() ||
       "audio.mp3";
 
-    const { data: ownerProfileEarly } = await admin
-      .from("profiles")
-      .select("plan")
-      .eq("id", user.id)
-      .maybeSingle();
+    // Soft climb while the original pulls from R2 (can be slow on large files).
+    let downloadPct = 5;
+    const downloadTick = setInterval(() => {
+      downloadPct = Math.min(14, downloadPct + 1);
+      void reportProgress(downloadPct, "downloading");
+    }, 1200);
+
+    const [objectResult, ownerProfileEarly] = await Promise.all([
+      getObjectBytes(media.object_key).finally(() => clearInterval(downloadTick)),
+      admin
+        .from("profiles")
+        .select("plan")
+        .eq("id", user.id)
+        .maybeSingle()
+        .then((res) => res.data),
+    ]);
+    const { bytes, contentType } = objectResult;
     const planEarly = normalizePlan(ownerProfileEarly?.plan);
+    await reportProgress(15, "preparing_audio");
     // Free: first 30 min. Unlimited: hard-cap at the advertised 3 hours.
     const maxSeconds =
       planEarly === "free" ? FREE_TRANSCRIBE_SECONDS : UNLIMITED_MAX_SECONDS;
@@ -187,24 +217,6 @@ export async function POST(_request: Request, { params }: Params) {
     let audioBytes = bytes;
     let audioFilename = filename;
     let audioType = media.content_type || contentType;
-
-    const jobId = transcript.active_job_id as string;
-    let lastReportedPct = 10;
-
-    const reportProgress = async (pct: number, stage?: string) => {
-      const next = Math.max(lastReportedPct, Math.min(99, Math.round(pct)));
-      // Only write when % advances (avoids hammering Supabase during ticks).
-      if (next <= lastReportedPct) return;
-      lastReportedPct = next;
-      await admin
-        .from("transcription_jobs")
-        .update({
-          progress_pct: next,
-          ...(stage ? { stage } : {}),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", jobId);
-    };
 
     // Videos / oversized uploads → compact mono MP3 before Groq.
     if (shouldExtract) {

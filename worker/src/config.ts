@@ -16,5 +16,6 @@ export const config = {
   /** Product target — reject above this. */
   maxFileSeconds: Number(process.env.UNLIMITED_MAX_SECONDS || 3 * 60 * 60),
   freeClipSeconds: Number(process.env.FREE_TRANSCRIBE_SECONDS || 30 * 60),
-  pollMs: Number(process.env.WORKER_POLL_MS || 15_000),
+  /** Backup claim interval when HTTP dispatch is missed (was 15s — felt stuck). */
+  pollMs: Number(process.env.WORKER_POLL_MS || 3_000),
 };

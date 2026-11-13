@@ -179,15 +179,68 @@ export function DeskShell({ displayName, initial }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadAll identity changes with the same deps
   }, [page, activeView, debouncedQuery]);
 
-  // Poll while jobs are active so the progress bar tracks mid-ASR ticks.
+  const hasActiveJobs = transcripts.some(isActiveDeskStatus);
+
+  // Light progress poll while jobs are active (avoids full desk bootstrap every 2s).
   useEffect(() => {
-    const hasActive = transcripts.some(isActiveDeskStatus);
-    if (!hasActive) return;
+    if (!hasActiveJobs) return;
+    let cancelled = false;
+
+    async function pollProgress() {
+      try {
+        const res = await fetch("/api/desk/progress", {
+          credentials: "same-origin",
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          items?: Array<{
+            id: string;
+            status: string;
+            job_stage: string | null;
+            progress_pct: number | null;
+          }>;
+        };
+        const items = data.items ?? [];
+        const byId = new Map(items.map((item) => [item.id, item]));
+
+        setTranscripts((prev) => {
+          let needsFullRefresh = false;
+          const next = prev.map((row) => {
+            const wasActive = isActiveDeskStatus(row);
+            const patch = byId.get(row.id);
+            if (patch) {
+              return {
+                ...row,
+                status: patch.status,
+                job_stage: patch.job_stage,
+                progress_pct: patch.progress_pct,
+              };
+            }
+            if (wasActive) {
+              // Left the active set → finished or failed; pull full row once.
+              needsFullRefresh = true;
+            }
+            return row;
+          });
+          if (needsFullRefresh && !cancelled) {
+            void loadAll({ silent: true });
+          }
+          return next;
+        });
+      } catch {
+        // Keep last known progress; next tick retries.
+      }
+    }
+
+    void pollProgress();
     const id = window.setInterval(() => {
-      void loadAll({ silent: true });
-    }, 2000);
-    return () => window.clearInterval(id);
-  }, [transcripts, loadAll]);
+      void pollProgress();
+    }, 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [hasActiveJobs, loadAll]);
 
   const activeFolder = folders.find((f) => f.id === activeView) ?? null;
 

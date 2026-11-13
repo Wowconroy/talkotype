@@ -29,15 +29,19 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Mark "starting" immediately so the desk isn't stuck at 0% while
+  // Vercel `after()` / worker dispatch warms up.
   if (transcript.active_job_id) {
     await admin
       .from("transcription_jobs")
       .update({
         status: "queued",
-        stage: "queued",
-        progress_pct: 0,
+        stage: "starting",
+        progress_pct: 3,
         started_at: null,
         updated_at: new Date().toISOString(),
+        error_message: null,
+        error_code: null,
       })
       .eq("id", transcript.active_job_id);
   }

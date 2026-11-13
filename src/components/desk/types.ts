@@ -64,9 +64,13 @@ export const MODEL_TO_MODE_LABEL: Record<string, string> = {
 
 const STAGE_LABELS: Record<string, string> = {
   queued: "Queued",
+  starting: "Starting",
+  downloading: "Downloading",
   uploading: "Uploading",
   preparing_audio: "Preparing audio",
   chunking: "Splitting audio",
+  diarizing: "Recognizing speakers",
+  gap_fill: "Filling gaps",
   transcribing: "Transcribing",
   publishing: "Finalising",
   awaiting_source: "Waiting for source",
