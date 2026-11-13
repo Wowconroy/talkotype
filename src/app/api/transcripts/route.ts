@@ -7,16 +7,16 @@ import {
   isR2Configured,
 } from "@/lib/r2";
 import { reconcileFreeQuotaForUser } from "@/lib/desk-data";
-import { isAcceptedMediaFile } from "@/lib/accepted-media";
 import {
   FREE_DAILY_TRANSCRIPTS,
-  formatBytes,
-  maxConcurrentJobs,
-  maxUploadBytes,
   mediaExpiresAt,
   normalizePlan,
 } from "@/lib/plan-limits";
 import { resolveModelForMode } from "@/lib/transcription-modes";
+import {
+  canStartNewJob,
+  validateUploadCandidate,
+} from "@/lib/upload-batch";
 import { randomUUID } from "crypto";
 
 function quotaPayload(
@@ -240,16 +240,6 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!isLinkImport && filename) {
-    const accepted = isAcceptedMediaFile({
-      filename,
-      contentType,
-    });
-    if (!accepted.ok) {
-      return NextResponse.json({ error: accepted.error }, { status: 415 });
-    }
-  }
-
   const requestKey = body.requestKey?.trim() || randomUUID();
   const wantSpeakers = Boolean(body.speakers);
   const { mode, model } = resolveModelForMode(
@@ -270,20 +260,17 @@ export async function POST(request: Request) {
   const plan = normalizePlan(profile?.plan);
   const isUnlimited = plan === "unlimited";
   const speakersRequested = wantSpeakers && isUnlimited;
-  const uploadCap = maxUploadBytes(plan);
 
-  if (
-    !isLinkImport &&
-    typeof body.sizeBytes === "number" &&
-    body.sizeBytes > uploadCap
-  ) {
-    return NextResponse.json(
-      {
-        error: `File is too large for your plan (max ${formatBytes(uploadCap)}).`,
-        maxBytes: uploadCap,
-      },
-      { status: 413 },
-    );
+  if (!isLinkImport && filename) {
+    const validated = validateUploadCandidate(plan, {
+      name: filename,
+      size: typeof body.sizeBytes === "number" ? body.sizeBytes : 1,
+      type: contentType,
+    });
+    if (!validated.ok) {
+      const status = /too large/i.test(validated.error) ? 413 : 415;
+      return NextResponse.json({ error: validated.error }, { status });
+    }
   }
 
   if (wantSpeakers && !isUnlimited) {
@@ -313,18 +300,18 @@ export async function POST(request: Request) {
   if (activeError) {
     return NextResponse.json({ error: activeError.message }, { status: 400 });
   }
-  const maxConcurrent = maxConcurrentJobs(plan);
-  if (typeof activeCount === "number" && activeCount >= maxConcurrent) {
-    return NextResponse.json(
-      {
-        error: isUnlimited
-          ? `Too many files processing (max ${maxConcurrent} at once). Wait for some to finish.`
-          : "Free plan processes one file at a time. Wait for it to finish, or go Unlimited.",
-        activeJobs: activeCount,
-        maxConcurrent,
-      },
-      { status: 429 },
-    );
+  if (typeof activeCount === "number") {
+    const slot = canStartNewJob({ plan, activeCount });
+    if (!slot.ok) {
+      return NextResponse.json(
+        {
+          error: slot.error,
+          activeJobs: activeCount,
+          maxConcurrent: slot.maxConcurrent,
+        },
+        { status: 429 },
+      );
+    }
   }
 
   // Drop ghost free-plan slots before reserve so UI/DB stay aligned with live files.

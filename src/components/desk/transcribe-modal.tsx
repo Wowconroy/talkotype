@@ -3,14 +3,19 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Link2, Upload, X } from "lucide-react";
-import { ACCEPT_ATTR, isAcceptedMediaFile } from "@/lib/accepted-media";
+import { ACCEPT_ATTR } from "@/lib/accepted-media";
 import {
   formatBytes,
   FREE_TRANSCRIBE_SECONDS,
+  maxFileSeconds,
   maxUploadBytes,
   UNLIMITED_MAX_CONCURRENT,
-  UNLIMITED_UPLOAD_POOL,
 } from "@/lib/plan-limits";
+import {
+  selectUploadBatch,
+  uploadPoolSize,
+  validateUploadCandidate,
+} from "@/lib/upload-batch";
 import { LanguageSelect } from "./language-select";
 import { ModePicker } from "./mode-picker";
 import {
@@ -135,8 +140,10 @@ export function TranscribeModal({
   if (!open) return null;
 
   const blocked = limitReached || hitLimit;
-  const uploadCap = maxUploadBytes(isUnlimited ? "unlimited" : "free");
+  const plan = isUnlimited ? "unlimited" : "free";
+  const uploadCap = maxUploadBytes(plan);
   const freeMinutes = Math.round(FREE_TRANSCRIBE_SECONDS / 60);
+  const maxHours = Math.round(maxFileSeconds("unlimited") / 3600);
 
   function patchUpload(id: string, patch: Partial<UploadItem>) {
     setUploads((prev) =>
@@ -145,19 +152,13 @@ export function TranscribeModal({
   }
 
   async function uploadOne(file: File, itemId: string) {
-    const accepted = isAcceptedMediaFile({
-      filename: file.name,
-      contentType: file.type,
+    const validated = validateUploadCandidate(plan, {
+      name: file.name,
+      size: file.size,
+      type: file.type,
     });
-    if (!accepted.ok) {
-      patchUpload(itemId, { status: "error", error: accepted.error });
-      return;
-    }
-    if (file.size > uploadCap) {
-      patchUpload(itemId, {
-        status: "error",
-        error: `Too large for your plan (max ${formatBytes(uploadCap)}).`,
-      });
+    if (!validated.ok) {
+      patchUpload(itemId, { status: "error", error: validated.error });
       return;
     }
 
@@ -249,24 +250,40 @@ export function TranscribeModal({
     const all = Array.from(fileList);
     if (all.length === 0) return;
 
-    if (!isUnlimited) {
-      if (all.length > 1) {
-        setPendingPick(all.slice(0, 12));
-        setError(
-          "Free plan allows one active upload at a time. Choose which file to upload.",
-        );
-        return;
-      }
-    } else if (all.length > UNLIMITED_MAX_CONCURRENT) {
+    const decision = selectUploadBatch(
+      plan,
+      all.map((f) => ({ name: f.name, size: f.size, type: f.type })),
+    );
+
+    if (!decision.ok && decision.needsChoice) {
+      const byName = new Map(all.map((f) => [f.name + f.size, f]));
+      setPendingPick(
+        decision.files
+          .map((c) => byName.get(c.name + c.size))
+          .filter((f): f is File => Boolean(f)),
+      );
+      setError(decision.error);
+      return;
+    }
+
+    if (!decision.ok) {
+      setError(decision.error);
+      return;
+    }
+
+    if (decision.truncated) {
       setError(
-        `Unlimited uploads up to ${UNLIMITED_MAX_CONCURRENT} files per batch. Extra files were ignored.`,
+        `Unlimited uploads up to ${decision.maxBatch} files per batch. Extra files were ignored.`,
       );
     }
 
-    const files = all.slice(0, isUnlimited ? UNLIMITED_MAX_CONCURRENT : 1);
+    const allowedNames = new Set(
+      decision.files.map((f) => f.name + f.size),
+    );
+    const files = all.filter((f) => allowedNames.has(f.name + f.size));
     setPendingPick(null);
     setBusy(true);
-    setError(null);
+    if (!decision.truncated) setError(null);
     setMessage(null);
 
     const items: UploadItem[] = files.map((file, i) => ({
@@ -278,7 +295,7 @@ export function TranscribeModal({
     setUploads(items);
 
     const work = files.map((file, i) => ({ file, id: items[i].id }));
-    const concurrency = isUnlimited ? UNLIMITED_UPLOAD_POOL : 1;
+    const concurrency = uploadPoolSize(plan);
     await runPool(work, concurrency, async ({ file, id }) => {
       await uploadOne(file, id);
     });
@@ -423,7 +440,7 @@ export function TranscribeModal({
               />
               <p className="mx-auto mt-4 max-w-sm text-xs leading-relaxed text-muted-foreground">
                 {isUnlimited
-                  ? "Unlimited keeps originals forever while your plan is active. Target length: up to 3 hours per file."
+                  ? `Unlimited keeps originals forever while your plan is active. Up to ${maxHours} hours per file.`
                   : `Free keeps originals for 7 days. Longer files are clipped to the first ${freeMinutes} minutes.`}{" "}
                 <Link
                   href="/privacy"

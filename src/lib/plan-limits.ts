@@ -7,10 +7,11 @@ export const FREE_DAILY_TRANSCRIPTS = 3;
 export const FREE_TRANSCRIBE_SECONDS = 30 * 60;
 
 /**
- * Unlimited: initial product target is 3 hours per file.
- * (Size still capped separately; duration probe/FFmpeg not wired yet.)
+ * Unlimited: verified product target is 3 hours per file.
+ * Duration probe/FFmpeg enforcement is not wired yet — UI/API still advertise 3h.
  */
 export const UNLIMITED_MAX_SECONDS = 3 * 60 * 60;
+export const UNLIMITED_MAX_HOURS = UNLIMITED_MAX_SECONDS / 3600;
 
 /** Concurrent processing / batch slots. */
 export const FREE_MAX_CONCURRENT = 1;
