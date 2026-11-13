@@ -5,7 +5,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "FAQ — Transcription, pricing, exports & privacy",
   description:
-    "Answers about Talkotype audio and video transcription: free vs Unlimited, file formats, speaker labels, exports (TXT, PDF, DOCX, SRT), languages, security, and canceling.",
+    "Answers about Talkotype audio and video transcription: free vs Unlimited, unclear audio, timed transcripts, speaker labels, exports (TXT, PDF, DOCX, SRT, VTT), languages, security, and canceling.",
 };
 
 type FaqItem = {
@@ -18,12 +18,13 @@ const faqs: FaqItem[] = [
   {
     q: "What is Talkotype?",
     plain:
-      "Talkotype is an AI transcription service that turns audio and video into clean, editable text. Upload common formats, pick a language or let Talkotype detect it, then copy or export your transcript.",
+      "Talkotype is an AI transcription service that turns audio and video into clean, editable, timed text. Upload common formats, pick a language or let Talkotype detect it, then read, click to listen, copy, or export your transcript.",
     a: (
       <>
         Talkotype is an AI transcription service that turns audio and video into
-        clean, editable text. Drop a meeting, voice note, podcast cut, or Zoom
-        export — we type so you don&apos;t have to. Start on{" "}
+        clean, editable, timed text. Drop a meeting, voice note, podcast cut, or
+        Zoom export — we type so you don&apos;t have to. Open a transcript,
+        click a sentence to hear that moment, then copy or export. Start on{" "}
         <Link href="/signup" className="font-semibold text-coral hover:underline">
           Free
         </Link>{" "}
@@ -32,6 +33,22 @@ const faqs: FaqItem[] = [
           Unlimited
         </Link>{" "}
         when your rambles get serious.
+      </>
+    ),
+  },
+  {
+    q: "What technology powers Talkotype?",
+    plain:
+      "Talkotype uses advanced speech recognition built for real-world audio — not studio-perfect clips. It is designed to pull usable text even from unclear, quiet, accented, or messy recordings, then present a timed transcript you can read and play back.",
+    a: (
+      <>
+        We run advanced speech recognition tuned for{" "}
+        <em>real</em> recordings — not just studio-perfect takes. That means
+        Talkotype can often pull usable text from mumbled lines, quiet mics,
+        accents, overlapping chatter, and far-from-perfect phone video. You get
+        a timed transcript you can skim, click to hear, and clean up where a
+        human still knows best. We keep the model stack under the hood so you
+        can focus on the words, not the wiring.
       </>
     ),
   },
@@ -56,16 +73,16 @@ const faqs: FaqItem[] = [
   {
     q: "Can I export my transcript?",
     plain:
-      "Yes. Free plans export TXT. Unlimited adds PDF, DOCX, and SRT for captions and subtitles workflows.",
+      "Yes. Free plans export TXT. Unlimited adds PDF, DOCX, SRT, and VTT for captions and subtitles workflows.",
     a: (
       <>
         Yes. Free exports <strong>TXT</strong> for quick paste into notes apps.{" "}
         <Link href="/pricing" className="font-semibold text-coral hover:underline">
           Unlimited
         </Link>{" "}
-        adds <strong>PDF</strong>, <strong>DOCX</strong>, and{" "}
-        <strong>SRT</strong> for editors and caption workflows. More on formats
-        in{" "}
+        adds <strong>PDF</strong>, <strong>DOCX</strong>, <strong>SRT</strong>,
+        and <strong>VTT</strong> for editors and caption workflows. More on
+        formats in{" "}
         <Link
           href="/blog/transcripts-vs-captions-vs-subtitles"
           className="font-semibold text-coral hover:underline"
@@ -168,12 +185,14 @@ const faqs: FaqItem[] = [
   {
     q: "What about accents, background noise, and poor audio?",
     plain:
-      "Clear speech works best, but Talkotype generally handles accents, mild background noise, and imperfect meeting audio. Very noisy files may need a cleanup pass after transcription.",
+      "Clear speech still works best, but Talkotype’s advanced recognition is built for messy reality: accents, cafe noise, quiet speakers, and imperfect meeting audio. Extremely unclear clips may still need a quick human polish after.",
     a: (
       <>
-        Clear speech wins, but accents, cafe murmur, and meeting chaos are
-        usually okay. Very noisy or distant mics may need a human polish pass
-        after. Tips live in{" "}
+        Clear speech still wins — but our advanced recognition is built for the
+        messy stuff: accents, cafe murmur, soft talkers, phone video, and
+        meeting chaos. It often recovers lines that used to come back as
+        gibberish. Extremely unclear or distant audio may still want a quick
+        human polish. Tips live in{" "}
         <Link
           href="/blog/transcribe-audio-with-background-noise"
           className="font-semibold text-coral hover:underline"
@@ -188,6 +207,34 @@ const faqs: FaqItem[] = [
           how to fix an AI transcript
         </Link>
         .
+      </>
+    ),
+  },
+  {
+    q: "Can I play audio from inside the transcript?",
+    plain:
+      "Yes. Finished transcripts show inline timestamps. Click a sentence or timestamp to open the player and jump to that moment in the recording.",
+    a: (
+      <>
+        Yes. When a transcript is ready, timestamps sit inline with the text —
+        dense and readable, not one sentence per mile of scroll. Click a
+        sentence or a <strong>(m:ss)</strong> stamp to open the player and jump
+        straight to that moment. Handy for checking names, numbers, and
+        anything the AI almost-but-not-quite nailed.
+      </>
+    ),
+  },
+  {
+    q: "If I delete a file, is it really gone?",
+    plain:
+      "Yes. Deleting a transcript removes it from your desk, deletes related transcript data, and wipes the stored media for that file. Lifetime library stats may still count past uploads without keeping the files.",
+    a: (
+      <>
+        Yes. Hitting <strong>Delete</strong> removes the transcript from your
+        desk, clears related transcript data, and wipes the stored media for
+        that file. It can&apos;t be undone. Your account stats may still
+        remember that you transcribed something (all-time totals) without
+        keeping the file itself.
       </>
     ),
   },
@@ -216,12 +263,16 @@ const faqs: FaqItem[] = [
   {
     q: "How do I cancel my subscription?",
     plain:
-      "Cancel anytime from account settings once billing is live. You keep Unlimited access until the end of the current billing period.",
+      "Cancel anytime from Account Settings with Manage plan (Paddle customer portal). You keep Unlimited access until the end of the current billing period.",
     a: (
       <>
-        Cancel anytime from account settings once billing is live. You keep
-        Unlimited until the end of the period you already paid for — no cliff
-        mid-transcript. Details live in our{" "}
+        Open{" "}
+        <Link href="/account" className="font-semibold text-coral hover:underline">
+          Account Settings
+        </Link>
+        , hit <strong>Manage plan</strong>, and cancel in the Paddle portal.
+        You keep Unlimited until the end of the period you already paid for —
+        no cliff mid-transcript. Details live in our{" "}
         <Link href="/terms" className="font-semibold text-coral hover:underline">
           terms
         </Link>
@@ -232,12 +283,12 @@ const faqs: FaqItem[] = [
   {
     q: "Can I get captions or subtitles from my transcript?",
     plain:
-      "Unlimited can export SRT timed captions from your transcript for video editors and many players. Clean the text first for best results.",
+      "Unlimited can export SRT and VTT timed captions from your transcript for video editors and many players. Clean the text first for best results.",
     a: (
       <>
-        Yes on Unlimited via <strong>SRT</strong> export — timed lines for
-        editors and many video players. Clean names and numbers first, then
-        export. More context in{" "}
+        Yes on Unlimited via <strong>SRT</strong> and <strong>VTT</strong>{" "}
+        export — timed lines for editors and many video players. Clean names
+        and numbers first, then export. More context in{" "}
         <Link
           href="/blog/transcripts-vs-captions-vs-subtitles"
           className="font-semibold text-coral hover:underline"
@@ -343,8 +394,9 @@ export default function FaqPage() {
             Frequently asked questions
           </h1>
           <p className="mt-4 text-base leading-relaxed text-muted-foreground">
-            Transcription, pricing, exports, privacy, and the mildly chaotic
-            realities of real-world audio — answered without corporate fog.
+            Transcription, unclear audio, timed playback, pricing, exports,
+            privacy, and the mildly chaotic realities of real-world recordings —
+            answered without corporate fog.
           </p>
         </div>
 
