@@ -27,7 +27,7 @@ const LINES = [
     text: "Okay so the plan is simple — we ship the landing, keep the colors sunny, and let people talk instead of type.",
   },
   {
-    speaker: "Maya",
+    speaker: "Melania",
     tone: "text-coral",
     stamp: "0:21",
     text: "Love it. Also never make me manually timestamp this again. My wrists filed a complaint.",
