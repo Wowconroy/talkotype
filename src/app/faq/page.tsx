@@ -38,17 +38,18 @@ const faqs: FaqItem[] = [
   {
     q: "Can I upload large files?",
     plain:
-      "Yes. Free plans support uploads up to 30 minutes, one file at a time. Talkotype Unlimited supports files up to 5 hours long for long meetings, interviews, and episode drafts.",
+      "Yes. Free transcribes the first 30 minutes of a file, one at a time, with 7-day media storage. Unlimited supports up to 10 hours / 5 GB per file, 50 uploads at once, and forever storage.",
     a: (
       <>
-        Yes. Free covers uploads up to <strong>30 minutes</strong>, one file at
-        a time.{" "}
+        Free transcribes the <strong>first 30 minutes</strong> (longer files are
+        clipped), one file at a time, and keeps originals for{" "}
+        <strong>7 days</strong>.{" "}
         <Link href="/pricing" className="font-semibold text-coral hover:underline">
           Unlimited
         </Link>{" "}
-        handles files up to <strong>5 hours</strong> — long meetings,
-        interviews, lecture dumps, episode drafts. Trim dead air if you only
-        need one chapter.
+        handles up to <strong>10 hours / 5 GB</strong> per file,{" "}
+        <strong>50 uploads at a time</strong>, and keeps media{" "}
+        <strong>forever</strong>.
       </>
     ),
   },
@@ -250,13 +251,13 @@ const faqs: FaqItem[] = [
   {
     q: "How much can I transcribe?",
     plain:
-      "Free: 3 transcripts per day, files up to 30 minutes. Unlimited: no daily cap for one person, files up to 5 hours each.",
+      "Free: 3 transcripts per day, first 30 minutes transcribed, 7-day storage. Unlimited: no daily cap, 10 hours / 5 GB per file, 50 at a time, forever storage.",
     a: (
       <>
-        <strong>Free:</strong> 3 transcripts per day, files up to 30 minutes.{" "}
-        <strong>Unlimited:</strong> no daily cap for one human, files up to 5
-        hours each — built for people who talk for a living (or never stop).
-        Peek at{" "}
+        <strong>Free:</strong> 3 transcripts per day, first 30 minutes
+        transcribed, originals kept 7 days. <strong>Unlimited:</strong> no
+        daily cap, up to 10 hours / 5 GB per file, 50 at a time, storage
+        forever. Peek at{" "}
         <Link href="/pricing" className="font-semibold text-coral hover:underline">
           pricing
         </Link>{" "}

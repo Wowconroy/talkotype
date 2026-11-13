@@ -1,11 +1,12 @@
 import type { User } from "@supabase/supabase-js";
-import { ensureProfile } from "@/lib/ensure-profile";
-import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   DeskFolder,
   DeskTranscript,
   DeskUsage,
 } from "@/components/desk/types";
+import { ensureProfile } from "@/lib/ensure-profile";
+import { FREE_DAILY_TRANSCRIPTS } from "@/lib/plan-limits";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type DeskBootstrap = {
   displayName: string;
@@ -44,7 +45,7 @@ export async function reconcileFreeQuotaForUser(userId: string) {
   return {
     transcripts_used: usage?.transcripts_used ?? 0,
     usage_date: today,
-    limit: 3 as number | null,
+    limit: FREE_DAILY_TRANSCRIPTS as number | null,
   };
 }
 
@@ -145,7 +146,7 @@ export async function loadDeskBootstrap(
       ? {
           transcripts_used: stored,
           usage_date: today,
-          limit: 3,
+          limit: FREE_DAILY_TRANSCRIPTS,
         }
       : {
           transcripts_used: stored,

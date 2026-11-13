@@ -1,5 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 import { ensureProfile } from "@/lib/ensure-profile";
+import { FREE_DAILY_TRANSCRIPTS } from "@/lib/plan-limits";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AccountBootstrapPayload = {
@@ -75,7 +76,11 @@ export async function loadAccountBootstrap(
     dailyUsage:
       plan === "unlimited"
         ? { transcripts_used: 0, usage_date: today, limit: null }
-        : { transcripts_used: stored, usage_date: today, limit: 3 },
+        : {
+            transcripts_used: stored,
+            usage_date: today,
+            limit: FREE_DAILY_TRANSCRIPTS,
+          },
     invoices: (invoicesResult.data as Array<Record<string, unknown>>) ?? [],
   };
 }

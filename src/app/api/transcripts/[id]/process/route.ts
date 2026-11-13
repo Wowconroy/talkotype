@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  clipTranscriptToSeconds,
+  FREE_TRANSCRIBE_SECONDS,
+  normalizePlan,
+} from "@/lib/plan-limits";
 import { getObjectBytes, isR2Configured } from "@/lib/r2";
 import { isGroqConfigured, transcribeWithGroq } from "@/lib/groq-whisper";
 
@@ -134,13 +139,24 @@ export async function POST(_request: Request, { params }: Params) {
       media.object_key.split("/").pop() ||
       "audio.mp3";
 
-    const result = await transcribeWithGroq({
+    const rawResult = await transcribeWithGroq({
       bytes,
       filename,
       contentType: media.content_type || contentType,
       model: job?.model,
       language: transcript.requested_language,
     });
+
+    const { data: ownerProfile } = await admin
+      .from("profiles")
+      .select("plan")
+      .eq("id", user.id)
+      .maybeSingle();
+    const plan = normalizePlan(ownerProfile?.plan);
+    const result =
+      plan === "free"
+        ? clipTranscriptToSeconds(rawResult, FREE_TRANSCRIBE_SECONDS)
+        : { ...rawResult, clipped: false };
 
     await admin
       .from("transcription_jobs")
@@ -195,6 +211,7 @@ export async function POST(_request: Request, { params }: Params) {
       transcript: published,
       chars: result.text.length,
       segments: result.segments?.length ?? 0,
+      clippedToFreeLimit: result.clipped,
     });
   } catch (err) {
     const message =

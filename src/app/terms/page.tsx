@@ -152,18 +152,21 @@ export default function TermsPage() {
         </p>
         <ul>
           <li>
-            <strong>Free:</strong> up to 3 transcripts per day; uploads up to 30
-            minutes; one upload at a time; lower processing priority; TXT export
-            when export is available.
+            <strong>Free:</strong> up to 3 transcripts per day; transcription
+            limited to the first 30 minutes of each file; one upload at a time;
+            original media retained for 7 days; lower processing priority; TXT
+            export when export is available.
           </li>
           <li>
             <strong>Unlimited:</strong> no daily transcript cap for one person;
-            uploads up to 5 hours per file; higher priority; features such as
-            speaker labels and PDF, DOCX, and SRT exports when those features
-            are available; priced at USD 20 per month billed monthly, or the
-            yearly equivalent shown on the Pricing page (currently USD 14 per
-            month equivalent when billed yearly at USD 168 per year, reflecting
-            a 30% discount versus twelve monthly payments).
+            uploads up to 10 hours or 5 GB per file; up to 50 concurrent
+            uploads; original media retained for the life of the subscription;
+            higher priority; features such as speaker labels and PDF, DOCX, and
+            SRT exports when those features are available; priced at USD 20 per
+            month billed monthly, or the yearly equivalent shown on the Pricing
+            page (currently USD 14 per month equivalent when billed yearly at
+            USD 168 per year, reflecting a 30% discount versus twelve monthly
+            payments).
           </li>
         </ul>
 

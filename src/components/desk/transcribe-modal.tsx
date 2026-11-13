@@ -10,6 +10,12 @@ import {
   QuotaLimitNotice,
 } from "./quota-limit-notice";
 import {
+  formatBytes,
+  FREE_TRANSCRIBE_SECONDS,
+  maxUploadBytes,
+  UNLIMITED_MAX_CONCURRENT,
+} from "@/lib/plan-limits";
+import {
   DEFAULT_TRANSCRIBE_OPTIONS,
   MODE_TO_MODEL,
   type QuotaSnapshot,
@@ -58,9 +64,18 @@ export function TranscribeModal({
 
   const blocked = limitReached || hitLimit;
 
+  const uploadCap = maxUploadBytes(isUnlimited ? "unlimited" : "free");
+  const freeMinutes = Math.round(FREE_TRANSCRIBE_SECONDS / 60);
+
   async function uploadFile(file: File) {
     if (blocked) {
       setHitLimit(true);
+      return;
+    }
+    if (file.size > uploadCap) {
+      setError(
+        `“${file.name}” is too large for your plan (max ${formatBytes(uploadCap)}).`,
+      );
       return;
     }
     setBusy(true);
@@ -142,6 +157,21 @@ export function TranscribeModal({
     }
   }
 
+  async function uploadFiles(fileList: FileList | File[]) {
+    const files = Array.from(fileList).slice(
+      0,
+      isUnlimited ? UNLIMITED_MAX_CONCURRENT : 1,
+    );
+    if (files.length === 0) return;
+    if (!isUnlimited && files.length > 1) {
+      setError("Free plan uploads one file at a time.");
+      return;
+    }
+    for (const file of files) {
+      await uploadFile(file);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 sm:items-center">
       <button
@@ -185,8 +215,8 @@ export function TranscribeModal({
               onDrop={(e) => {
                 e.preventDefault();
                 setDragging(false);
-                const file = e.dataTransfer.files?.[0];
-                if (file && !busy) void uploadFile(file);
+                const files = e.dataTransfer.files;
+                if (files?.length && !busy) void uploadFiles(files);
               }}
               className={`mt-5 rounded-2xl border border-dashed px-5 py-10 text-center transition ${
                 dragging
@@ -198,10 +228,17 @@ export function TranscribeModal({
                 <Upload className="size-5" />
               </div>
               <p className="font-display text-lg font-semibold text-ink">
-                {busy ? "Uploading…" : "Drop a file here"}
+                {busy
+                  ? "Uploading…"
+                  : isUnlimited
+                    ? "Drop files here"
+                    : "Drop a file here"}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                MP3, WAV, M4A, MP4, and similar formats
+                MP3, WAV, M4A, MP4, and similar · max {formatBytes(uploadCap)}
+                {isUnlimited
+                  ? ` · up to ${UNLIMITED_MAX_CONCURRENT} at once`
+                  : ` · first ${freeMinutes} min transcribed`}
               </p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <button
@@ -227,15 +264,18 @@ export function TranscribeModal({
                 type="file"
                 className="hidden"
                 accept="audio/*,video/*"
+                multiple={isUnlimited}
                 disabled={busy}
                 onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
+                  const files = event.target.files;
                   event.target.value = "";
-                  if (file) void uploadFile(file);
+                  if (files?.length) void uploadFiles(files);
                 }}
               />
               <p className="mx-auto mt-4 max-w-sm text-xs leading-relaxed text-muted-foreground">
-                Only upload recordings you have the right to process.{" "}
+                {isUnlimited
+                  ? "Unlimited keeps originals forever while your plan is active."
+                  : `Free keeps originals for 7 days. Longer files are clipped to the first ${freeMinutes} minutes.`}{" "}
                 <Link
                   href="/privacy"
                   className="font-semibold text-ink underline"

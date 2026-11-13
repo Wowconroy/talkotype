@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { InfinityIcon, Mic, Rocket, Sparkles, Zap } from "lucide-react";
+import {
+  HardDrive,
+  InfinityIcon,
+  Mic,
+  Rocket,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
 
 type Billing = "monthly" | "yearly";
@@ -22,8 +29,14 @@ const freeFeatures = [
   },
   {
     icon: Rocket,
-    title: "30 minute uploads",
-    copy: "Each file can be up to 30 minutes. One upload at a time, nice and simple.",
+    title: "30 minute transcripts",
+    copy: "Longer files are fine — we transcribe the first 30 minutes. One upload at a time.",
+    tone: "muted" as const,
+  },
+  {
+    icon: HardDrive,
+    title: "File storage — 7 days",
+    copy: "Original audio and video stay available for a week, then clear out automatically.",
     tone: "muted" as const,
   },
   {
@@ -43,14 +56,20 @@ const unlimitedFeatures = [
   },
   {
     icon: Rocket,
-    title: "5 hour uploads",
-    copy: "Drop long meetings, interviews, or episode drafts — up to 5 hours per file.",
+    title: "10 hour / 5 GB uploads",
+    copy: "Each file can be up to 10 hours or 5 GB. Upload up to 50 files at a time.",
     tone: "coral" as const,
+  },
+  {
+    icon: HardDrive,
+    title: "File storage — forever",
+    copy: "Keep originals on your desk as long as your Unlimited plan is active.",
+    tone: "lemon" as const,
   },
   {
     icon: Sparkles,
     title: "The whole glow kit",
-    copy: "Speaker labels, PDF / DOCX / SRT exports, and storage that doesn’t pinch.",
+    copy: "Speaker labels, PDF / DOCX / SRT exports, and priority processing.",
     tone: "lemon" as const,
   },
   {

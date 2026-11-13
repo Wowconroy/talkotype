@@ -12,6 +12,7 @@ import {
 } from "@/lib/display-name";
 import { createClient } from "@/lib/supabase/client";
 import type { AccountBootstrapPayload } from "@/lib/account-data";
+import { FREE_DAILY_TRANSCRIPTS } from "@/lib/plan-limits";
 
 const PaddleCheckoutButton = dynamic(
   () =>
@@ -21,7 +22,7 @@ const PaddleCheckoutButton = dynamic(
   { ssr: false },
 );
 
-const FREE_DAILY_LIMIT = 3;
+const FREE_DAILY_LIMIT = FREE_DAILY_TRANSCRIPTS;
 
 type AccountView = {
   email: string;

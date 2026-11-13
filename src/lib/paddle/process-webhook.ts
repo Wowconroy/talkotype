@@ -1,3 +1,4 @@
+import { mediaExpiresAt } from "@/lib/plan-limits";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type PaddleWebhookEvent = {
@@ -135,6 +136,17 @@ export async function processPaddleEvent(event: PaddleWebhookEvent) {
     }
 
     await admin.from("profiles").update(patch).eq("id", userId);
+
+    // Retention follows plan: Unlimited keeps forever; Free gets a 7-day window.
+    if (cancels || activates) {
+      await admin
+        .from("media_assets")
+        .update({
+          expires_at: cancels ? mediaExpiresAt("free") : mediaExpiresAt("unlimited"),
+        })
+        .eq("user_id", userId)
+        .is("deleted_at", null);
+    }
   }
 
   if (

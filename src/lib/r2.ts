@@ -163,7 +163,10 @@ export async function getObjectBytes(objectKey: string): Promise<{
   };
 }
 
-/** Default retention for original uploads (7 days). */
+/**
+ * @deprecated Prefer mediaExpiresAt(plan) from plan-limits.
+ * Kept as free-plan default (7 days) for any leftover callers.
+ */
 export function defaultOriginalExpiry(from = new Date()) {
   return new Date(from.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 }

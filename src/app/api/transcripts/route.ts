@@ -4,10 +4,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   buildObjectKey,
   createUploadUrl,
-  defaultOriginalExpiry,
   isR2Configured,
 } from "@/lib/r2";
 import { reconcileFreeQuotaForUser } from "@/lib/desk-data";
+import {
+  FREE_DAILY_TRANSCRIPTS,
+  formatBytes,
+  maxConcurrentJobs,
+  maxUploadBytes,
+  mediaExpiresAt,
+  normalizePlan,
+} from "@/lib/plan-limits";
 import { randomUUID } from "crypto";
 
 const ALLOWED_MODELS = new Set([
@@ -38,7 +45,7 @@ function quotaPayload(
     alreadyReserved: Boolean(quota?.already_reserved),
     transcripts_used: used,
     usage_date: quota?.quota_date ?? null,
-    limit: plan === "unlimited" ? null : 3,
+    limit: plan === "unlimited" ? null : FREE_DAILY_TRANSCRIPTS,
   };
 }
 
@@ -185,8 +192,24 @@ export async function POST(request: Request) {
     .select("plan")
     .eq("id", user.id)
     .maybeSingle();
-  const isUnlimited = profile?.plan === "unlimited";
+  const plan = normalizePlan(profile?.plan);
+  const isUnlimited = plan === "unlimited";
   const speakersRequested = wantSpeakers && isUnlimited;
+  const uploadCap = maxUploadBytes(plan);
+
+  if (
+    !isLinkImport &&
+    typeof body.sizeBytes === "number" &&
+    body.sizeBytes > uploadCap
+  ) {
+    return NextResponse.json(
+      {
+        error: `File is too large for your plan (max ${formatBytes(uploadCap)}).`,
+        maxBytes: uploadCap,
+      },
+      { status: 413 },
+    );
+  }
 
   if (wantSpeakers && !isUnlimited) {
     return NextResponse.json(
@@ -215,11 +238,13 @@ export async function POST(request: Request) {
   if (activeError) {
     return NextResponse.json({ error: activeError.message }, { status: 400 });
   }
-  const maxConcurrent = isUnlimited ? 5 : 2;
+  const maxConcurrent = maxConcurrentJobs(plan);
   if (typeof activeCount === "number" && activeCount >= maxConcurrent) {
     return NextResponse.json(
       {
-        error: "Too many transcripts processing. Wait for one to finish.",
+        error: isUnlimited
+          ? `Too many files processing (max ${maxConcurrent} at once). Wait for some to finish.`
+          : "Free plan processes one file at a time. Wait for it to finish, or go Unlimited.",
         activeJobs: activeCount,
         maxConcurrent,
       },
@@ -237,7 +262,7 @@ export async function POST(request: Request) {
     {
       p_user_id: user.id,
       p_request_key: requestKey,
-      p_daily_limit: 3,
+      p_daily_limit: FREE_DAILY_TRANSCRIPTS,
     },
   );
 
@@ -366,7 +391,7 @@ export async function POST(request: Request) {
       object_key: objectKey,
       content_type: contentType!,
       size_bytes: body.sizeBytes ?? null,
-      expires_at: defaultOriginalExpiry(),
+      expires_at: mediaExpiresAt(plan),
       status: "active",
     })
     .select("*")

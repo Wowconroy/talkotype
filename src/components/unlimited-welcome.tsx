@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Briefcase,
   Flame,
+  HardDrive,
   InfinityIcon,
   Rocket,
   Volume2,
@@ -22,9 +23,15 @@ const perks = [
   },
   {
     icon: Rocket,
-    title: "5 hour uploads",
-    copy: "Each file can be up to 5 hours long — long meetings, interviews, episode drafts, the whole saga.",
+    title: "10 hour / 5 GB uploads",
+    copy: "Each file can be up to 10 hours or 5 GB — and you can upload up to 50 files at a time.",
     tone: "bg-lemon text-ink",
+  },
+  {
+    icon: HardDrive,
+    title: "Storage forever",
+    copy: "Keep originals on your desk for as long as Unlimited is active — no 7-day wipe.",
+    tone: "bg-[#c4a484] text-ink",
   },
   {
     icon: Volume2,
