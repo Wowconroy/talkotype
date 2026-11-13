@@ -776,4 +776,344 @@ export const seoPostsBatch2: BlogPost[] = [
       },
     ],
   },
+{
+    slug: "how-to-export-srt-for-capcut",
+    title: "How to Export an SRT File for CapCut",
+    description:
+      "Clean a Talkotype transcript, export SRT on Unlimited, and import timed captions into CapCut. Includes a sample SRT block.",
+    date: "2026-11-13",
+    primaryQuery: "export srt for capcut",
+    intent: "informational",
+    country: "US",
+    coverTheme: "coral",
+    coverIcon: "doc",
+    readingMinutes: 7,
+    related: [
+      "transcripts-vs-captions-vs-subtitles",
+      "txt-vs-docx-vs-srt-vs-vtt",
+      "how-to-fix-ai-transcript",
+    ],
+    sources: [
+      {
+        label: "W3C: captions / subtitles overview",
+        url: "https://www.w3.org/WAI/media/av/captions/",
+      },
+    ],
+    seoNotes: "Editor-specific export intent; Unlimited SRT.",
+    blocks: [
+      {
+        type: "p",
+        text: "CapCut expects timed caption files. SRT is the common interchange format: numbered cues with start/end times and one or two lines of text. Talkotype Unlimited can export SRT after you clean the transcript.",
+      },
+      {
+        type: "h2",
+        text: "Prepare the transcript first",
+      },
+      {
+        type: "ol",
+        items: [
+          "Transcribe your video in [Talkotype](/app).",
+          "Fix names and numbers while clicking timestamps to listen.",
+          "Keep lines short enough to read on mobile — captions are not a paragraph dump. W3C’s [captions overview](https://www.w3.org/WAI/media/av/captions/) is a good reminder of why timing and readability matter.",
+        ],
+      },
+      {
+        type: "h2",
+        text: "Export SRT from Talkotype",
+      },
+      {
+        type: "ol",
+        items: [
+          "Open the ready transcript on Unlimited.",
+          "Export **SRT** (VTT is also available if your editor prefers it).",
+          "In CapCut, import captions / subtitles from the SRT file and nudge cues if the cut length changed.",
+        ],
+      },
+      {
+        type: "sample",
+        label: "Sample SRT cues (synthetic)",
+        note: "Illustrative file fragment.",
+        lines: [
+          { mark: "note", text: "1" },
+          { mark: "note", text: "00:00:04,000 --> 00:00:07,200" },
+          { text: "We ship the hero today." },
+          { mark: "note", text: "2" },
+          { mark: "note", text: "00:00:07,200 --> 00:00:11,000" },
+          { text: "Record a Loom walkthrough after lunch." },
+        ],
+      },
+      {
+        type: "callout",
+        title: "Plan note",
+        text: "SRT and VTT exports are Unlimited features on [pricing](/pricing). Free exports TXT for notes. Format differences: [TXT vs DOCX vs SRT vs VTT](/blog/txt-vs-docx-vs-srt-vs-vtt).",
+      },
+      {
+        type: "cta",
+        text: "Need captions for a short cut?",
+        href: "/pricing",
+        label: "See Unlimited exports",
+      },
+    ],
+  },
+  {
+    slug: "fix-missing-words-in-ai-transcript",
+    title: "How to Fix Missing Words in an AI Transcript",
+    description:
+      "Recover quiet speech, dropouts, and skipped phrases after automatic transcription. Checklist, before-and-after sample, and when to re-run the file.",
+    date: "2026-11-13",
+    primaryQuery: "fix missing words in ai transcript",
+    intent: "informational",
+    country: "US",
+    coverTheme: "mint",
+    coverIcon: "fix",
+    readingMinutes: 7,
+    related: [
+      "how-to-fix-ai-transcript",
+      "transcribe-audio-with-background-noise",
+      "what-affects-ai-transcription-accuracy",
+      "click-transcript-timestamp-to-play-audio",
+    ],
+    sources: [],
+    seoNotes: "Distinct from general fix guide; focuses on omissions.",
+    blocks: [
+      {
+        type: "p",
+        text: "Missing words are different from wrong words. The transcript looks fluent, but a clause never appeared. Usually the mic was quiet, someone turned away, or a burst of noise covered the phrase.",
+      },
+      {
+        type: "h2",
+        text: "Find the gaps",
+      },
+      {
+        type: "ul",
+        items: [
+          "Skim while listening with [click-to-play timestamps](/blog/click-transcript-timestamp-to-play-audio).",
+          "Watch for sudden topic jumps — a missing sentence often sits between two confident lines.",
+          "Search for known proper nouns that never show up.",
+        ],
+      },
+      {
+        type: "sample",
+        label: "Quiet aside recovered (synthetic)",
+        note: "Labeled demo.",
+        lines: [
+          {
+            mark: "bad",
+            time: "00:04:12",
+            text: "We will ship Friday and announce next week.",
+          },
+          {
+            mark: "good",
+            time: "00:04:12",
+            text: "We will ship Friday — unless legal blocks the claim — and announce next week.",
+          },
+        ],
+      },
+      {
+        type: "h2",
+        text: "Fix or re-transcribe?",
+      },
+      {
+        type: "checklist",
+        items: [
+          "One missing aside: type it in while the player is parked on that stamp.",
+          "Many gaps across the whole file: improve audio (gain, denoise) and run again — see [background noise](/blog/transcribe-audio-with-background-noise).",
+          "Systematic soft speech: closer mic next time; accuracy factors in [what affects AI transcription accuracy](/blog/what-affects-ai-transcription-accuracy).",
+        ],
+      },
+      {
+        type: "p",
+        text: "For punctuation and wrong words rather than omissions, use the broader [how to fix an AI transcript](/blog/how-to-fix-ai-transcript) checklist.",
+      },
+      {
+        type: "cta",
+        text: "Upload a clearer take or clean the current one",
+        href: "/signup",
+        label: "Open Talkotype",
+      },
+    ],
+  },
+  {
+    slug: "how-to-transcribe-screen-recording",
+    title: "How to Transcribe a Screen Recording",
+    description:
+      "Avoid silent Loom and OS captures. Confirm the microphone channel, then transcribe the file in Talkotype for searchable walkthrough notes.",
+    date: "2026-11-13",
+    primaryQuery: "how to transcribe screen recording",
+    intent: "informational",
+    country: "US",
+    coverTheme: "lemon",
+    coverIcon: "video",
+    readingMinutes: 6,
+    related: [
+      "how-to-transcribe-mov-video",
+      "how-to-get-transcript-from-mp4",
+      "webinar-recording-to-blog-post",
+    ],
+    sources: [],
+    seoNotes: "Silent-mic trap is the unique angle.",
+    blocks: [
+      {
+        type: "p",
+        text: "Screen recordings fail transcription for one boring reason: no microphone track. The picture looks fine; the waveform is flat. Fix the capture settings, then upload.",
+      },
+      {
+        type: "h2",
+        text: "Before you hit record",
+      },
+      {
+        type: "ul",
+        items: [
+          "Enable microphone input in Loom, QuickTime, OBS, or your OS picker.",
+          "Do a five-second test and watch the input meter.",
+          "Mute system notification sounds that drown soft speech.",
+        ],
+      },
+      {
+        type: "h2",
+        text: "Transcribe the walkthrough",
+      },
+      {
+        type: "ol",
+        items: [
+          "Export MP4 or MOV with audio.",
+          "Upload at [your desk](/app).",
+          "Turn the transcript into a help article or changelog using [webinar to blog post](/blog/webinar-recording-to-blog-post) as a structure reference.",
+        ],
+      },
+      {
+        type: "sample",
+        label: "Silent vs mic-enabled capture (synthetic log)",
+        lines: [
+          {
+            mark: "bad",
+            text: "demo-v1.mov — waveform flat 0:00–3:40. No transcriptable speech.",
+          },
+          {
+            mark: "good",
+            text: "demo-v2.mov — mic enabled. Transcript length matches a 3:40 narration.",
+          },
+        ],
+      },
+      {
+        type: "cta",
+        text: "Got a narrated screen capture?",
+        href: "/signup",
+        label: "Transcribe it",
+      },
+    ],
+  },
+  {
+    slug: "how-to-share-a-transcript",
+    title: "How to Share a Talkotype Transcript",
+    description:
+      "Share a read-only transcript link, or export a file when people need DOCX or PDF. Privacy checklist before you send anything.",
+    date: "2026-11-13",
+    primaryQuery: "how to share a transcript",
+    intent: "informational",
+    country: "US",
+    coverTheme: "blush",
+    coverIcon: "doc",
+    readingMinutes: 5,
+    related: [
+      "how-to-transcribe-confidential-recordings",
+      "how-to-export-transcript-to-pdf",
+      "txt-vs-docx-vs-srt-vs-vtt",
+    ],
+    sources: [],
+    seoNotes: "Product share feature + privacy.",
+    blocks: [
+      {
+        type: "p",
+        text: "Sometimes teammates need the text without an account. Talkotype can share a read-only link from a ready transcript. For formal reviews, export a file instead.",
+      },
+      {
+        type: "h2",
+        text: "Share link",
+      },
+      {
+        type: "ol",
+        items: [
+          "Open the transcript on [your desk](/app).",
+          "Use Share transcript and copy the link.",
+          "Send it only to people who should see that conversation.",
+        ],
+      },
+      {
+        type: "h2",
+        text: "Export instead",
+      },
+      {
+        type: "ul",
+        items: [
+          "TXT on Free for quick paste.",
+          "PDF or DOCX on Unlimited for comments and archives — see [export transcript to PDF](/blog/how-to-export-transcript-to-pdf).",
+          "SRT/VTT when the share is really about captions.",
+        ],
+      },
+      {
+        type: "callout",
+        title: "Privacy",
+        text: "Anyone with the link can read the text. For sensitive material, prefer exports you control and read [transcribe confidential recordings](/blog/how-to-transcribe-confidential-recordings). Delete the file when the share should end.",
+      },
+      {
+        type: "cta",
+        text: "Transcribe first, then share cleanly",
+        href: "/signup",
+        label: "Start free",
+      },
+    ],
+  },
+  {
+    slug: "how-to-organize-transcripts",
+    title: "How to Organize Transcripts in Talkotype",
+    description:
+      "Use folders, clear titles, and a simple naming scheme so meeting and interview transcripts stay findable on your desk.",
+    date: "2026-11-13",
+    primaryQuery: "how to organize transcripts",
+    intent: "informational",
+    country: "US",
+    coverTheme: "ink",
+    coverIcon: "doc",
+    readingMinutes: 5,
+    related: [
+      "meeting-recording-to-action-items",
+      "how-to-share-a-transcript",
+      "free-transcription-daily-limit-tips",
+    ],
+    sources: [],
+    seoNotes: "Desk folders feature.",
+    blocks: [
+      {
+        type: "p",
+        text: "A pile of Untitled transcripts wastes the whole point of searchable text. Spend thirty seconds on titles and folders when each job finishes.",
+      },
+      {
+        type: "h2",
+        text: "A simple scheme",
+      },
+      {
+        type: "ul",
+        items: [
+          "`YYYY-MM-DD · topic · people` — example: `2026-11-13 · pricing FAQ · Alex+Melania`.",
+          "Folders by project or client on [your desk](/app).",
+          "Move finished work out of Recent when the sprint ends.",
+        ],
+      },
+      {
+        type: "checklist",
+        items: [
+          "Rename before you share or export.",
+          "Delete test uploads so lifetime clutter does not confuse the desk (stats may still count all-time totals).",
+          "Keep action-item notes linked from [meeting recordings to action items](/blog/meeting-recording-to-action-items).",
+        ],
+      },
+      {
+        type: "cta",
+        text: "Bring order to the next upload",
+        href: "/app",
+        label: "Open your desk",
+      },
+    ],
+  },
 ];
