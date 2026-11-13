@@ -1,6 +1,7 @@
-import { Headphones, Sparkles, Timer, Waves } from "lucide-react";
+import { Headphones, Timer, Waves } from "lucide-react";
 import { ReviewsSlider } from "@/components/reviews-slider";
 import { StoryHero } from "@/components/story-hero";
+import { TranscriptionFlow } from "@/components/transcription-flow";
 import { UnlimitedWelcome } from "@/components/unlimited-welcome";
 
 const perks = [
@@ -89,40 +90,7 @@ export default function Home() {
             </ol>
           </div>
 
-          <div className="relative">
-            <div className="animate-wiggle absolute -right-2 -top-3 rounded-full bg-coral px-3 py-1 text-xs font-semibold text-white shadow-lg sm:-right-4">
-              words appear here →
-            </div>
-            <div className="rounded-[1.8rem] border border-border bg-mist p-5 shadow-[0_24px_50px_rgba(18,61,58,0.08)] sm:p-6">
-              <div className="mb-4 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <Sparkles className="size-4 text-coral" />
-                Live transcript preview
-              </div>
-              <div className="space-y-4 rounded-[1.3rem] bg-white p-5">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sea">
-                    Speaker 1 · 00:12
-                  </p>
-                  <p className="mt-1 text-sm leading-relaxed text-ink">
-                    Okay so the plan is simple: we ship the landing page, keep
-                    the colors fun, and let people talk instead of type.
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-coral">
-                    Speaker 2 · 00:21
-                  </p>
-                  <p className="mt-1 text-sm leading-relaxed text-ink">
-                    Love it. Also please never make me manually timestamp this
-                    again. My wrists filed a complaint.
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-secondary/80 px-4 py-3 text-sm text-ink/80">
-                  Tip: Talkotype keeps the umms optional. Your brilliance is not.
-                </div>
-              </div>
-            </div>
-          </div>
+          <TranscriptionFlow />
         </div>
       </section>
 
