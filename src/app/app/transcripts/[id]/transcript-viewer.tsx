@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DeskSidebar } from "@/components/desk/desk-sidebar";
 import {
@@ -79,6 +79,9 @@ export function TranscriptViewer({ id }: { id: string }) {
   const [seekToken, setSeekToken] = useState(0);
   const [activeSeg, setActiveSeg] = useState<number | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const playerSrcRef = useRef<string | null>(null);
+  const mediaUrlPromiseRef = useRef<Promise<string> | null>(null);
+  const playRequestRef = useRef(0);
 
   const loadMeta = useCallback(async () => {
     const res = await fetch("/api/desk", { credentials: "same-origin" });
@@ -181,9 +184,11 @@ export function TranscriptViewer({ id }: { id: string }) {
   const usingSyntheticSegments = (row?.segments?.length ?? 0) === 0;
 
   const ensureMediaUrl = useCallback(async () => {
-    if (playerSrc) return playerSrc;
+    if (playerSrcRef.current) return playerSrcRef.current;
+    if (mediaUrlPromiseRef.current) return mediaUrlPromiseRef.current;
+
     setMediaLoading(true);
-    try {
+    const promise = (async () => {
       const res = await fetch(
         `/api/transcripts/${id}/media-url?kind=playback`,
         { credentials: "same-origin" },
@@ -193,23 +198,40 @@ export function TranscriptViewer({ id }: { id: string }) {
         throw new Error(data.error || "Audio not available");
       }
       const url = data.url as string;
+      playerSrcRef.current = url;
       setPlayerSrc(url);
       return url;
+    })();
+
+    mediaUrlPromiseRef.current = promise;
+    try {
+      return await promise;
+    } catch (err) {
+      mediaUrlPromiseRef.current = null;
+      throw err;
     } finally {
       setMediaLoading(false);
     }
-  }, [id, playerSrc]);
+  }, [id]);
 
   async function playFromSegment(seg: DisplaySegment) {
     if (seg.start_ms == null) return;
+    // Capture synchronously so a slower earlier click cannot overwrite this seek.
+    const requestId = ++playRequestRef.current;
+    const targetMs = seg.start_ms;
     setError(null);
     setActiveSeg(seg.segment_index);
     setPlayerOpen(true);
+    setSeekMs(targetMs);
+    setSeekToken((n) => n + 1);
     try {
       await ensureMediaUrl();
-      setSeekMs(seg.start_ms);
+      if (playRequestRef.current !== requestId) return;
+      // Re-assert after await — defeats stale in-flight clicks.
+      setSeekMs(targetMs);
       setSeekToken((n) => n + 1);
     } catch (err) {
+      if (playRequestRef.current !== requestId) return;
       setError(err instanceof Error ? err.message : "Could not open audio");
     }
   }

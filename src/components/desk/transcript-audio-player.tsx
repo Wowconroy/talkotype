@@ -24,9 +24,10 @@ export function TranscriptAudioPlayer({
   open,
   onClose,
 }: Props) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mediaRef = useRef<HTMLAudioElement | HTMLVideoElement | null>(null);
   /** Seconds to seek to; cleared after a successful seeked event. */
   const pendingSeekSecRef = useRef<number | null>(null);
+  const seekGenRef = useRef(0);
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
@@ -44,47 +45,61 @@ export function TranscriptAudioPlayer({
       ? Math.min(100, Math.max(0, (currentMs / effectiveDurationMs) * 100))
       : 0;
 
-  function syncDuration(audio: HTMLAudioElement) {
-    const d = audio.duration;
+  function syncDuration(media: HTMLMediaElement) {
+    const d = media.duration;
     if (Number.isFinite(d) && d > 0) {
       setDurationMs(Math.round(d * 1000));
     }
   }
 
-  function tryApplyPendingSeek(audio: HTMLAudioElement) {
+  function tryApplyPendingSeek(media: HTMLMediaElement, gen: number) {
     const target = pendingSeekSecRef.current;
     if (target == null) return;
-    if (audio.readyState < 1) return;
+    if (seekGenRef.current !== gen) return;
+    if (media.readyState < 1) return;
     try {
-      syncDuration(audio);
-      audio.currentTime = target;
-      setCurrentMs(Math.round(target * 1000));
-      void audio
+      syncDuration(media);
+      // Clamp into known duration when available.
+      const max =
+        Number.isFinite(media.duration) && media.duration > 0
+          ? media.duration - 0.05
+          : target;
+      const next = Math.max(0, Math.min(target, max));
+      media.currentTime = next;
+      setCurrentMs(Math.round(next * 1000));
+      void media
         .play()
-        .then(() => setPlaying(true))
+        .then(() => {
+          if (seekGenRef.current === gen) setPlaying(true);
+        })
         .catch(() => {
+          if (seekGenRef.current !== gen) return;
           setPlaying(false);
           setError("Could not start playback — click play.");
         });
     } catch {
-      setError("Could not seek in this file.");
+      if (seekGenRef.current === gen) {
+        setError("Could not seek in this file.");
+      }
     }
   }
 
-  // New click → optimistic UI + queue a seek.
+  // New click → optimistic UI + queue a seek (latest token wins).
   useEffect(() => {
     if (!open || seekMs == null) return;
     const sec = Math.max(0, seekMs / 1000);
+    const gen = ++seekGenRef.current;
     pendingSeekSecRef.current = sec;
     setCurrentMs(Math.round(seekMs));
     setError(null);
-    const audio = audioRef.current;
-    if (audio) tryApplyPendingSeek(audio);
+    const media = mediaRef.current;
+    if (media) tryApplyPendingSeek(media, gen);
   }, [seekMs, seekToken, open]);
 
   useEffect(() => {
     if (open) return;
     pendingSeekSecRef.current = null;
+    seekGenRef.current += 1;
     setPlaying(false);
     setCurrentMs(0);
     setError(null);
@@ -92,54 +107,65 @@ export function TranscriptAudioPlayer({
 
   // Wire media events once per open session.
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !open) return;
+    const media = mediaRef.current;
+    if (!media || !open) return;
 
-    const onReady = () => tryApplyPendingSeek(audio);
-    const onDuration = () => syncDuration(audio);
+    const onReady = () => tryApplyPendingSeek(media, seekGenRef.current);
+    const onDuration = () => syncDuration(media);
     const onTime = () => {
-      // Don't fight a pending seek with 0:00 timeupdates during load.
-      if (pendingSeekSecRef.current != null && audio.currentTime < 0.2) return;
-      setCurrentMs(Math.round(audio.currentTime * 1000));
+      const pending = pendingSeekSecRef.current;
+      // Ignore stale 0:00 updates while a seek is still outstanding.
+      if (pending != null && media.currentTime < 0.35 && pending > 1) return;
+      setCurrentMs(Math.round(media.currentTime * 1000));
     };
     const onSeeked = () => {
       const target = pendingSeekSecRef.current;
-      if (target != null && Math.abs(audio.currentTime - target) < 0.75) {
-        pendingSeekSecRef.current = null;
+      const actual = media.currentTime;
+      if (target != null) {
+        if (Math.abs(actual - target) <= 1.25) {
+          pendingSeekSecRef.current = null;
+        } else {
+          // Some MP4s snap to a distant keyframe — nudge again once.
+          try {
+            media.currentTime = target;
+          } catch {
+            /* ignore */
+          }
+        }
       }
-      setCurrentMs(Math.round(audio.currentTime * 1000));
+      setCurrentMs(Math.round(media.currentTime * 1000));
     };
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onError = () => setError("Audio failed to load.");
 
-    audio.addEventListener("loadedmetadata", onReady);
-    audio.addEventListener("loadeddata", onReady);
-    audio.addEventListener("canplay", onReady);
-    audio.addEventListener("durationchange", onDuration);
-    audio.addEventListener("timeupdate", onTime);
-    audio.addEventListener("seeked", onSeeked);
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("error", onError);
+    media.addEventListener("loadedmetadata", onReady);
+    media.addEventListener("loadeddata", onReady);
+    media.addEventListener("canplay", onReady);
+    media.addEventListener("durationchange", onDuration);
+    media.addEventListener("timeupdate", onTime);
+    media.addEventListener("seeked", onSeeked);
+    media.addEventListener("play", onPlay);
+    media.addEventListener("pause", onPause);
+    media.addEventListener("error", onError);
 
     return () => {
-      audio.removeEventListener("loadedmetadata", onReady);
-      audio.removeEventListener("loadeddata", onReady);
-      audio.removeEventListener("canplay", onReady);
-      audio.removeEventListener("durationchange", onDuration);
-      audio.removeEventListener("timeupdate", onTime);
-      audio.removeEventListener("seeked", onSeeked);
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("error", onError);
+      media.removeEventListener("loadedmetadata", onReady);
+      media.removeEventListener("loadeddata", onReady);
+      media.removeEventListener("canplay", onReady);
+      media.removeEventListener("durationchange", onDuration);
+      media.removeEventListener("timeupdate", onTime);
+      media.removeEventListener("seeked", onSeeked);
+      media.removeEventListener("play", onPlay);
+      media.removeEventListener("pause", onPause);
+      media.removeEventListener("error", onError);
     };
   }, [open]);
 
   // Load source when it arrives / changes.
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !open || !src) return;
+    const media = mediaRef.current;
+    if (!media || !open || !src) return;
     setError(null);
 
     let absolute = src;
@@ -149,40 +175,44 @@ export function TranscriptAudioPlayer({
       /* keep src */
     }
 
-    if (audio.src !== absolute) {
-      audio.src = src;
-      audio.load();
+    if (media.src !== absolute) {
+      media.src = src;
+      media.load();
       return;
     }
-    tryApplyPendingSeek(audio);
+    tryApplyPendingSeek(media, seekGenRef.current);
   }, [src, open, seekToken]);
 
   if (!open) return null;
 
   async function togglePlay() {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) {
+    const media = mediaRef.current;
+    if (!media) return;
+    if (media.paused) {
       try {
-        tryApplyPendingSeek(audio);
-        await audio.play();
+        tryApplyPendingSeek(media, seekGenRef.current);
+        await media.play();
         setPlaying(true);
       } catch {
         setError("Could not start playback.");
       }
     } else {
-      audio.pause();
+      media.pause();
     }
   }
 
   function scrub(value: number) {
-    const audio = audioRef.current;
-    if (!audio || effectiveDurationMs <= 0) return;
+    const media = mediaRef.current;
+    if (!media || effectiveDurationMs <= 0) return;
     const next = (value / 100) * (effectiveDurationMs / 1000);
+    const gen = ++seekGenRef.current;
     pendingSeekSecRef.current = next;
     setCurrentMs(Math.round(next * 1000));
     try {
-      audio.currentTime = next;
+      media.currentTime = next;
+      void media.play().then(() => {
+        if (seekGenRef.current === gen) setPlaying(true);
+      });
     } catch {
       /* wait until seekable */
     }
@@ -190,7 +220,16 @@ export function TranscriptAudioPlayer({
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-border/80 bg-white/95 px-4 py-3 shadow-[0_-12px_40px_rgba(18,61,58,0.12)] backdrop-blur">
-      <audio ref={audioRef} preload="auto" playsInline />
+      {/*
+        Hidden video element: seeking in MP4 is more reliable than <audio>
+        when playback falls back to the original video file.
+      */}
+      <video
+        ref={mediaRef as React.MutableRefObject<HTMLVideoElement | null>}
+        preload="auto"
+        playsInline
+        className="pointer-events-none absolute h-0 w-0 opacity-0"
+      />
       <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
@@ -250,7 +289,7 @@ export function TranscriptAudioPlayer({
             onChange={(e) => {
               const v = Number(e.target.value);
               setVolume(v);
-              if (audioRef.current) audioRef.current.volume = v;
+              if (mediaRef.current) mediaRef.current.volume = v;
             }}
             className="w-20 accent-sea"
             aria-label="Volume"
