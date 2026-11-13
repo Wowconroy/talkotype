@@ -620,6 +620,7 @@ export function TranscriptViewer({ id }: { id: string }) {
         src={playerSrc}
         seekMs={seekMs}
         seekToken={seekToken}
+        durationSeconds={row.duration_seconds}
         onClose={() => {
           setPlayerOpen(false);
           setActiveSeg(null);
