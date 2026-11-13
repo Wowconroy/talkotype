@@ -1,16 +1,13 @@
-import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { DeskLoading } from "@/components/desk/desk-loading";
 import { DeskShell } from "@/components/desk/desk-shell";
 import { loadDeskBootstrap } from "@/lib/desk-data";
 import { createClient } from "@/lib/supabase/server";
 
 export const instant = false;
 
-async function AppDesk() {
+export default async function AppPage() {
   const supabase = await createClient();
-  // Cookie session is enough here — proxy already refreshed claims.
-  // Avoid getUser() round-trip to Auth API on every desk paint.
+  // Cookie session only — proxy already verified claims for /app.
   const { data: sessionData } = await supabase.auth.getSession();
   const user = sessionData.session?.user ?? null;
   if (!user) {
@@ -49,12 +46,4 @@ async function AppDesk() {
       </div>
     );
   }
-}
-
-export default function AppPage() {
-  return (
-    <Suspense fallback={<DeskLoading />}>
-      <AppDesk />
-    </Suspense>
-  );
 }

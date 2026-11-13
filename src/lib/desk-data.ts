@@ -49,11 +49,70 @@ export async function reconcileFreeQuotaForUser(userId: string) {
   };
 }
 
+type TranscriptRow = {
+  id: string;
+  title: string | null;
+  status: string;
+  duration_seconds: number | null;
+  requested_language: string | null;
+  source_filename: string | null;
+  folder_id: string | null;
+  source_url: string | null;
+  source_kind: string | null;
+  created_at: string;
+  updated_at: string;
+  content_revision: number | null;
+  active_job_id: string | null;
+  share_enabled: boolean | null;
+  media_assets?: Array<{
+    size_bytes?: number | null;
+    kind?: string | null;
+    expires_at?: string | null;
+  }> | null;
+  active_job?: { model?: string | null } | { model?: string | null }[] | null;
+};
+
+function mapTranscriptRow(row: TranscriptRow): DeskTranscript {
+  const media = Array.isArray(row.media_assets) ? row.media_assets : [];
+  const original =
+    media.find((m) => m.kind === "original") ?? media[0] ?? null;
+  const job = Array.isArray(row.active_job)
+    ? row.active_job[0]
+    : row.active_job;
+  const {
+    media_assets: _omitMedia,
+    active_job: _omitJob,
+    ...rest
+  } = row;
+  return {
+    ...rest,
+    model: job?.model ?? null,
+    media_size_bytes: original?.size_bytes ?? null,
+    media_expires_at: original?.expires_at ?? null,
+  } as DeskTranscript;
+}
+
 async function loadTranscripts(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,
 ): Promise<DeskTranscript[]> {
+  // One round-trip: embed media + active job model via FK.
   const { data, error } = await admin
+    .from("transcripts")
+    .select(
+      "id, title, status, duration_seconds, requested_language, source_filename, folder_id, source_url, source_kind, created_at, updated_at, content_revision, active_job_id, share_enabled, media_assets(size_bytes, kind, expires_at), active_job:transcription_jobs!active_job_id(model)",
+    )
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (!error && data) {
+    return (data as TranscriptRow[]).map(mapTranscriptRow);
+  }
+
+  // Fallback if the FK embed alias isn't available in this project yet.
+  const { data: rows, error: fallbackError } = await admin
     .from("transcripts")
     .select(
       "id, title, status, duration_seconds, requested_language, source_filename, folder_id, source_url, source_kind, created_at, updated_at, content_revision, active_job_id, share_enabled, media_assets(size_bytes, kind, expires_at)",
@@ -61,12 +120,12 @@ async function loadTranscripts(
     .eq("user_id", userId)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(50);
 
-  if (error) throw new Error(error.message);
+  if (fallbackError) throw new Error(fallbackError.message || error?.message);
 
-  const rows = data ?? [];
-  const jobIds = rows
+  const list = (rows ?? []) as TranscriptRow[];
+  const jobIds = list
     .map((row) => row.active_job_id)
     .filter((id): id is string => Boolean(id));
 
@@ -84,21 +143,12 @@ async function loadTranscripts(
     );
   }
 
-  return rows.map((row) => {
-    const media = Array.isArray(row.media_assets) ? row.media_assets : [];
-    const original =
-      media.find((m: { kind?: string }) => m.kind === "original") ??
-      media[0] ??
-      null;
-    const { media_assets: _omit, ...rest } = row;
-    return {
-      ...rest,
-      model: row.active_job_id
-        ? (modelByJob.get(row.active_job_id) ?? null)
-        : null,
-      media_size_bytes: original?.size_bytes ?? null,
-      media_expires_at: original?.expires_at ?? null,
-    } as DeskTranscript;
+  return list.map((row) => {
+    const mapped = mapTranscriptRow(row);
+    if (!mapped.model && row.active_job_id) {
+      mapped.model = modelByJob.get(row.active_job_id) ?? null;
+    }
+    return mapped;
   });
 }
 
@@ -111,7 +161,11 @@ export async function loadDeskBootstrap(
 
   const [profileResult, foldersResult, usageResult, transcripts] =
     await Promise.all([
-      admin.from("profiles").select("*").eq("id", userId).maybeSingle(),
+      admin
+        .from("profiles")
+        .select("display_name, email, plan")
+        .eq("id", userId)
+        .maybeSingle(),
       admin
         .from("folders")
         .select("id, name, created_at, updated_at")
@@ -130,7 +184,11 @@ export async function loadDeskBootstrap(
     throw new Error(foldersResult.error.message);
   }
 
-  let profile = profileResult.data;
+  let profile = profileResult.data as {
+    display_name?: string | null;
+    email?: string | null;
+    plan?: string | null;
+  } | null;
   if (!profile && user) {
     profile = await ensureProfile(user);
   }

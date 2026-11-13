@@ -1,10 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * Cookie session only — no Auth API round-trip.
+ * Proxy already verified claims on protected /app, /account, and desk APIs.
+ */
 export async function requireUser() {
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    return { supabase, user: null as null };
-  }
-  return { supabase, user: data.user };
+  const { data } = await supabase.auth.getSession();
+  const user = data.session?.user ?? null;
+  return { supabase, user };
 }

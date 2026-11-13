@@ -53,7 +53,8 @@ export async function proxy(request: NextRequest) {
     path.startsWith("/api/transcripts") ||
     path.startsWith("/api/account") ||
     path.startsWith("/api/desk") ||
-    path.startsWith("/api/folders");
+    path.startsWith("/api/folders") ||
+    path.startsWith("/api/billing/portal");
   const isProtectedPage =
     path.startsWith("/app") || path.startsWith("/account");
 
@@ -84,8 +85,15 @@ export async function proxy(request: NextRequest) {
   return supabaseResponse;
 }
 
+/** Only run auth proxy on routes that need it — not the whole marketing site. */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/app/:path*",
+    "/account/:path*",
+    "/api/transcripts/:path*",
+    "/api/account/:path*",
+    "/api/desk/:path*",
+    "/api/folders/:path*",
+    "/api/billing/portal",
   ],
 };

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AccountSettings } from "@/components/account-settings";
 import { loadAccountBootstrap } from "@/lib/account-data";
@@ -13,15 +12,7 @@ export const metadata: Metadata = {
 
 export const instant = false;
 
-function AccountLoading() {
-  return (
-    <div className="flex flex-1 items-center justify-center px-4 py-20 text-sm text-muted-foreground">
-      Loading your settings…
-    </div>
-  );
-}
-
-async function AccountPageContent() {
+export default async function AccountPage() {
   const supabase = await createClient();
   const { data: sessionData } = await supabase.auth.getSession();
   const user = sessionData.session?.user ?? null;
@@ -31,12 +22,4 @@ async function AccountPageContent() {
 
   const payload = await loadAccountBootstrap(user.id, user);
   return <AccountSettings initial={payload} />;
-}
-
-export default function AccountPage() {
-  return (
-    <Suspense fallback={<AccountLoading />}>
-      <AccountPageContent />
-    </Suspense>
-  );
 }
