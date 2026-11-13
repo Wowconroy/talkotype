@@ -86,6 +86,8 @@ export function TranscriptViewer({ id }: { id: string }) {
   const playerSrcRef = useRef<string | null>(null);
   const mediaUrlPromiseRef = useRef<Promise<string> | null>(null);
   const playRequestRef = useRef(0);
+  /** Swallow ghost clicks that land on sentences right after navigation. */
+  const ignorePlayUntilRef = useRef(0);
 
   const loadMeta = useCallback(async () => {
     const res = await fetch("/api/desk", { credentials: "same-origin" });
@@ -121,6 +123,28 @@ export function TranscriptViewer({ id }: { id: string }) {
     void loadTranscript();
     void loadMeta();
   }, [loadTranscript, loadMeta]);
+
+  useEffect(() => {
+    // Opening a transcript must not start audio. Menu click-through can hit the
+    // first sentence as the desk → viewer soft-nav swaps the DOM under the cursor.
+    ignorePlayUntilRef.current = Date.now() + 700;
+    setPlayerOpen(false);
+    setSeekMs(null);
+    setActiveSeg(null);
+    setPlayerSrc(null);
+    playerSrcRef.current = null;
+    mediaUrlPromiseRef.current = null;
+  }, [id]);
+
+  // Content appears after fetch — extend the guard so a late click-through
+  // cannot fire play on the first sentence as it mounts.
+  useEffect(() => {
+    if (!row) return;
+    ignorePlayUntilRef.current = Math.max(
+      ignorePlayUntilRef.current,
+      Date.now() + 500,
+    );
+  }, [row]);
 
   const mediaSize = useMemo(() => {
     if (row?.media_size_bytes != null) return row.media_size_bytes;
@@ -225,6 +249,7 @@ export function TranscriptViewer({ id }: { id: string }) {
 
   async function playFromSegment(seg: DisplaySegment) {
     if (seg.start_ms == null) return;
+    if (Date.now() < ignorePlayUntilRef.current) return;
     // Capture synchronously so a slower earlier click cannot overwrite this seek.
     const requestId = ++playRequestRef.current;
     const targetMs = seg.start_ms;
@@ -318,15 +343,30 @@ export function TranscriptViewer({ id }: { id: string }) {
   }
 
   async function downloadAudio() {
-    const res = await fetch(`/api/transcripts/${id}/media-url?kind=original`, {
-      credentials: "same-origin",
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "Audio not available");
-      return;
+    try {
+      const res = await fetch(`/api/transcripts/${id}/media-url?kind=original`, {
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Audio not available");
+        return;
+      }
+      // Fetch + save — do not window.open the media URL (browsers autoplay it).
+      const mediaRes = await fetch(data.url as string);
+      if (!mediaRes.ok) {
+        setError("Could not download audio");
+        return;
+      }
+      const blob = await mediaRes.blob();
+      const { downloadBlob } = await import("@/lib/download-blob");
+      const name =
+        row?.source_filename ||
+        `audio-${id}.${blob.type.includes("video") ? "mp4" : "mp3"}`;
+      downloadBlob(blob, name);
+    } catch {
+      setError("Could not download audio");
     }
-    window.open(data.url as string, "_blank", "noopener,noreferrer");
   }
 
   async function moveToFolder(folderId: string | null) {

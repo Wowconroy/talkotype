@@ -303,7 +303,17 @@ function RowMenu({
       if (!res.ok) {
         throw new Error(data.error || "Audio not available");
       }
-      window.open(data.url as string, "_blank", "noopener,noreferrer");
+      // Fetch + save — do not window.open the media URL (browsers autoplay it).
+      const mediaRes = await fetch(data.url as string);
+      if (!mediaRes.ok) {
+        throw new Error("Could not download audio");
+      }
+      const blob = await mediaRes.blob();
+      const { downloadBlob } = await import("@/lib/download-blob");
+      const name =
+        row.source_filename ||
+        `audio-${row.id}.${blob.type.includes("video") ? "mp4" : "mp3"}`;
+      downloadBlob(blob, name);
       onClose();
     } catch (err) {
       setDownloadError(
@@ -336,8 +346,10 @@ function RowMenu({
                 icon={<FileText className="size-4" />}
                 label="Open Transcript"
                 onClick={() => {
-                  onClose();
+                  // Navigate first; close the portal on the next frame so the
+                  // click cannot fall through onto the desk (or the new page).
                   router.push(`/app/transcripts/${row.id}`);
+                  window.setTimeout(() => onClose(), 0);
                 }}
               />
               <MenuItem
