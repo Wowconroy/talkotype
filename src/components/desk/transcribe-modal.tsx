@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { Link2, Upload, X } from "lucide-react";
 import { ACCEPT_ATTR } from "@/lib/accepted-media";
 import {
@@ -23,11 +28,17 @@ import {
   QuotaLimitNotice,
 } from "./quota-limit-notice";
 import {
+  AUDIO_LANGUAGES,
   DEFAULT_TRANSCRIBE_OPTIONS,
+  MODE_PRODUCT_LABEL,
   MODE_TO_MODEL,
+  TRANSCRIPTION_MODES,
   type QuotaSnapshot,
   type TranscribeOptions,
+  type TranscriptionMode,
 } from "./types";
+
+const OPTIONS_STORAGE_KEY = "talkotype.transcribeOptions";
 
 type Props = {
   open: boolean;
@@ -69,7 +80,8 @@ function putWithProgress(
           ),
         );
     };
-    xhr.onerror = () => reject(new Error("Network request failed during upload."));
+    xhr.onerror = () =>
+      reject(new Error("Network request failed during upload."));
     xhr.onabort = () => reject(new Error("Upload cancelled."));
     xhr.open("PUT", url);
     const headerRecord =
@@ -104,6 +116,39 @@ async function runPool<T>(
   await Promise.all(runners);
 }
 
+function loadSavedOptions(): TranscribeOptions {
+  if (typeof window === "undefined") return DEFAULT_TRANSCRIBE_OPTIONS;
+  try {
+    const raw = window.localStorage.getItem(OPTIONS_STORAGE_KEY);
+    if (!raw) return DEFAULT_TRANSCRIBE_OPTIONS;
+    const parsed = JSON.parse(raw) as Partial<TranscribeOptions>;
+    return { ...DEFAULT_TRANSCRIBE_OPTIONS, ...parsed };
+  } catch {
+    return DEFAULT_TRANSCRIBE_OPTIONS;
+  }
+}
+
+function saveOptions(options: TranscribeOptions) {
+  try {
+    window.localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(options));
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+function languageLabel(value: string) {
+  return (
+    AUDIO_LANGUAGES.find((lang) => lang.value === value)?.label ?? "Auto-detect"
+  );
+}
+
+function modeLabel(mode: TranscriptionMode) {
+  return (
+    TRANSCRIPTION_MODES.find((item) => item.id === mode)?.name ??
+    MODE_PRODUCT_LABEL[mode]
+  );
+}
+
 export function TranscribeModal({
   open,
   onClose,
@@ -117,7 +162,9 @@ export function TranscribeModal({
   const [options, setOptions] = useState<TranscribeOptions>(
     DEFAULT_TRANSCRIBE_OPTIONS,
   );
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [touchedLanguage, setTouchedLanguage] = useState(false);
+  const [touchedMode, setTouchedMode] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,8 +181,19 @@ export function TranscribeModal({
       setUploads([]);
       setPendingPick(null);
       setBusy(false);
+      setOptionsOpen(false);
+      setTouchedLanguage(false);
+      setTouchedMode(false);
+      setDragging(false);
+      return;
     }
+    setOptions(loadSavedOptions());
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    saveOptions(options);
+  }, [open, options]);
 
   if (!open) return null;
 
@@ -144,11 +202,44 @@ export function TranscribeModal({
   const uploadCap = maxUploadBytes(plan);
   const freeMinutes = Math.round(FREE_TRANSCRIBE_SECONDS / 60);
   const maxHours = Math.round(maxFileSeconds("unlimited") / 3600);
+  const extrasOn =
+    Number(options.speakers) +
+    Number(options.transcribeToEnglish) +
+    Number(options.filterFillers) +
+    Number(options.preferTimestamps);
 
   function patchUpload(id: string, patch: Partial<UploadItem>) {
     setUploads((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...patch } : item)),
     );
+  }
+
+  function maybeCloseOptions(next: {
+    language?: boolean;
+    mode?: boolean;
+  }) {
+    const languageDone = next.language ?? touchedLanguage;
+    const modeDone = next.mode ?? touchedMode;
+    if (languageDone && modeDone) {
+      setOptionsOpen(false);
+      setTouchedLanguage(false);
+      setTouchedMode(false);
+    }
+  }
+
+  function openOptionsPanel() {
+    setTouchedLanguage(false);
+    setTouchedMode(false);
+    setOptionsOpen(true);
+  }
+
+  function openFilePicker() {
+    if (busy || blocked) return;
+    if (optionsOpen) {
+      setError("Finish choosing language and mode first, then add files.");
+      return;
+    }
+    inputRef.current?.click();
   }
 
   async function uploadOne(file: File, itemId: string) {
@@ -159,6 +250,7 @@ export function TranscribeModal({
     });
     if (!validated.ok) {
       patchUpload(itemId, { status: "error", error: validated.error });
+      setError(validated.error);
       return;
     }
 
@@ -199,6 +291,7 @@ export function TranscribeModal({
             status: "error",
             error: created.error || "Plan limit reached",
           });
+          setError(created.error || "Plan limit reached");
           return;
         }
         throw new Error(created.error || "Could not start upload");
@@ -243,12 +336,19 @@ export function TranscribeModal({
             : "Network request failed. Check connection and try again."
           : raw;
       patchUpload(itemId, { status: "error", error: hint });
+      setError(hint);
     }
   }
 
   async function uploadFiles(fileList: FileList | File[]) {
+    // Copy immediately — clearing <input value> empties a live FileList.
     const all = Array.from(fileList);
     if (all.length === 0) return;
+
+    if (optionsOpen) {
+      setError("Finish choosing language and mode first, then add files.");
+      return;
+    }
 
     const decision = selectUploadBatch(
       plan,
@@ -256,10 +356,10 @@ export function TranscribeModal({
     );
 
     if (!decision.ok && decision.needsChoice) {
-      const byName = new Map(all.map((f) => [f.name + f.size, f]));
+      const byKey = new Map(all.map((f) => [`${f.name}::${f.size}`, f]));
       setPendingPick(
         decision.files
-          .map((c) => byName.get(c.name + c.size))
+          .map((c) => byKey.get(`${c.name}::${c.size}`))
           .filter((f): f is File => Boolean(f)),
       );
       setError(decision.error);
@@ -275,15 +375,38 @@ export function TranscribeModal({
       setError(
         `Unlimited uploads up to ${decision.maxBatch} files per batch. Extra files were ignored.`,
       );
+    } else {
+      setError(null);
     }
 
-    const allowedNames = new Set(
-      decision.files.map((f) => f.name + f.size),
+    const allowedKeys = new Set(
+      decision.files.map((f) => `${f.name}::${f.size}`),
     );
-    const files = all.filter((f) => allowedNames.has(f.name + f.size));
+    const files = all.filter((f) => allowedKeys.has(`${f.name}::${f.size}`));
+    if (files.length === 0) {
+      setError("No valid files to upload.");
+      return;
+    }
+
+    // Pre-validate so rejected formats show before the pool starts.
+    const rejected = files
+      .map((file) => ({
+        file,
+        result: validateUploadCandidate(plan, {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+        }),
+      }))
+      .filter((item) => !item.result.ok);
+
+    if (rejected.length === files.length) {
+      setError(rejected[0]?.result.ok === false ? rejected[0].result.error : "File rejected.");
+      return;
+    }
+
     setPendingPick(null);
     setBusy(true);
-    if (!decision.truncated) setError(null);
     setMessage(null);
 
     const items: UploadItem[] = files.map((file, i) => ({
@@ -301,9 +424,12 @@ export function TranscribeModal({
     });
 
     setBusy(false);
+    const hadError = rejected.length > 0;
     setMessage(
       files.length === 1
-        ? `Finished with “${files[0].name}”.`
+        ? hadError
+          ? `Finished with “${files[0].name}” (some files were skipped).`
+          : `Uploaded “${files[0].name}”. Transcription queued.`
         : `Finished batch of ${files.length} files.`,
     );
   }
@@ -318,6 +444,14 @@ export function TranscribeModal({
           : u,
       );
     });
+  }
+
+  function onFileInputChange(event: ChangeEvent<HTMLInputElement>) {
+    // Snapshot before reset — required for retrying the same file later.
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length === 0) return; // cancelled picker; keep existing selection
+    void uploadFiles(files);
   }
 
   return (
@@ -354,38 +488,56 @@ export function TranscribeModal({
           <QuotaLimitNotice className="mt-5" />
         ) : (
           <>
+            <div className="mt-5 flex justify-start">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onOpenImportLink}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2 text-sm font-semibold text-ink hover:bg-mist disabled:opacity-60"
+              >
+                <Link2 className="size-4 text-sea" />
+                Import from link
+              </button>
+            </div>
+
             <div
               role="button"
-              tabIndex={0}
-              aria-label={
-                isUnlimited
-                  ? "Drop files to upload, or press Enter to browse"
-                  : "Drop a file to upload, or press Enter to browse"
-              }
+              tabIndex={busy ? -1 : 0}
+              aria-label="Drag and drop files here, or click to browse"
               aria-disabled={busy}
+              onClick={() => openFilePicker()}
               onKeyDown={(e) => {
                 if (busy) return;
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  inputRef.current?.click();
+                  openFilePicker();
                 }
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setDragging(true);
               }}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragging(true);
               }}
-              onDragLeave={() => setDragging(false)}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                setDragging(false);
+              }}
               onDrop={(e) => {
                 e.preventDefault();
                 setDragging(false);
-                const files = e.dataTransfer.files;
-                if (files?.length && !busy) void uploadFiles(files);
+                if (busy) return;
+                const files = Array.from(e.dataTransfer.files ?? []);
+                if (files.length) void uploadFiles(files);
               }}
-              className={`mt-5 rounded-2xl border border-dashed px-5 py-10 text-center transition outline-none focus-visible:ring-2 focus-visible:ring-sea ${
+              className={`mt-3 cursor-pointer rounded-2xl border border-dashed px-5 py-10 text-center transition outline-none focus-visible:ring-2 focus-visible:ring-sea ${
                 dragging
                   ? "border-coral bg-coral-soft/50 ring-2 ring-coral/40"
-                  : "border-sea/50 bg-secondary/40"
-              }`}
+                  : "border-sea/50 bg-secondary/40 hover:border-sea"
+              } ${busy ? "cursor-wait opacity-80" : ""}`}
             >
               <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-white text-coral shadow-sm">
                 <Upload className="size-5" />
@@ -395,9 +547,7 @@ export function TranscribeModal({
                   ? "Uploading…"
                   : dragging
                     ? "Drop to upload"
-                    : isUnlimited
-                      ? "Drop files here"
-                      : "Drop a file here"}
+                    : "Drag and drop files here, or click to browse."}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 MP3, MP4, M4A, MOV, AAC, WAV, OGG, OPUS, MPEG, WMA, WMV · max{" "}
@@ -406,25 +556,6 @@ export function TranscribeModal({
                   ? ` · up to ${UNLIMITED_MAX_CONCURRENT} per batch`
                   : ` · first ${freeMinutes} min transcribed`}
               </p>
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => inputRef.current?.click()}
-                  className="rounded-xl bg-coral px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                >
-                  Browse files
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={onOpenImportLink}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-mist disabled:opacity-60"
-                >
-                  <Link2 className="size-4 text-sea" />
-                  Import from link
-                </button>
-              </div>
               <input
                 ref={inputRef}
                 type="file"
@@ -432,13 +563,14 @@ export function TranscribeModal({
                 accept={ACCEPT_ATTR}
                 multiple={isUnlimited}
                 disabled={busy}
-                onChange={(event) => {
-                  const files = event.target.files;
-                  event.target.value = "";
-                  if (files?.length) void uploadFiles(files);
-                }}
+                onChange={onFileInputChange}
+                onClick={(e) => e.stopPropagation()}
               />
-              <p className="mx-auto mt-4 max-w-sm text-xs leading-relaxed text-muted-foreground">
+              <p
+                className="mx-auto mt-4 max-w-sm text-xs leading-relaxed text-muted-foreground"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
                 {isUnlimited
                   ? `Unlimited keeps originals forever while your plan is active. Up to ${maxHours} hours per file.`
                   : `Free keeps originals for 7 days. Longer files are clipped to the first ${freeMinutes} minutes.`}{" "}
@@ -455,6 +587,99 @@ export function TranscribeModal({
               </p>
             </div>
 
+            <div className="mt-4 rounded-2xl border border-border/80 bg-mist/40 px-3.5 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Selected options
+                  </p>
+                  <p className="mt-1 truncate text-sm text-ink">
+                    {languageLabel(options.language)} · {modeLabel(options.mode)}
+                    {extrasOn > 0 ? ` · ${extrasOn} extra` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    optionsOpen ? setOptionsOpen(false) : openOptionsPanel()
+                  }
+                  className="shrink-0 text-sm font-semibold text-coral hover:underline disabled:opacity-60"
+                >
+                  {optionsOpen ? "Hide options" : "Change options"}
+                </button>
+              </div>
+
+              {optionsOpen ? (
+                <div className="mt-3 space-y-4 border-t border-border/70 pt-3">
+                  <LanguageSelect
+                    value={options.language}
+                    disabled={busy}
+                    onChange={(language) => {
+                      setOptions((o) => ({ ...o, language }));
+                      setTouchedLanguage(true);
+                      maybeCloseOptions({ language: true });
+                    }}
+                  />
+                  <ModePicker
+                    value={options.mode}
+                    disabled={busy}
+                    onChange={(mode) => {
+                      setOptions((o) => ({ ...o, mode }));
+                      setTouchedMode(true);
+                      maybeCloseOptions({ mode: true });
+                    }}
+                  />
+                  <div className="space-y-2.5 rounded-2xl border border-border/70 bg-white p-3.5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      More settings
+                    </p>
+                    <Toggle
+                      label="Recognize speakers"
+                      hint={
+                        isUnlimited
+                          ? "Labels who spoke when"
+                          : "Requires Unlimited plan"
+                      }
+                      checked={options.speakers}
+                      disabled={!isUnlimited}
+                      onChange={(speakers) =>
+                        setOptions((o) => ({ ...o, speakers }))
+                      }
+                    />
+                    <Toggle
+                      label="Transcribe to English"
+                      hint="Forces English output language"
+                      checked={options.transcribeToEnglish}
+                      onChange={(transcribeToEnglish) =>
+                        setOptions((o) => ({ ...o, transcribeToEnglish }))
+                      }
+                    />
+                    <Toggle
+                      label="Filter filler words"
+                      hint="Stored as a preference; applied when supported"
+                      checked={options.filterFillers}
+                      onChange={(filterFillers) =>
+                        setOptions((o) => ({ ...o, filterFillers }))
+                      }
+                    />
+                    <Toggle
+                      label="Prefer timestamps"
+                      hint="Keep timed segments for editor and exports"
+                      checked={options.preferTimestamps}
+                      onChange={(preferTimestamps) =>
+                        setOptions((o) => ({ ...o, preferTimestamps }))
+                      }
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Choose language and mode to return to the upload form.
+                    Transcription still starts when you add files.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
             {pendingPick ? (
               <div className="mt-4 rounded-2xl border border-border bg-mist/60 p-3.5">
                 <p className="text-sm font-semibold text-ink">
@@ -462,7 +687,7 @@ export function TranscribeModal({
                 </p>
                 <ul className="mt-2 space-y-1.5">
                   {pendingPick.map((file) => (
-                    <li key={file.name + file.size}>
+                    <li key={`${file.name}::${file.size}`}>
                       <button
                         type="button"
                         disabled={busy}
@@ -511,16 +736,7 @@ export function TranscribeModal({
                               ? "bg-sea"
                               : "bg-coral/80"
                         }`}
-                        style={{
-                          width: `${
-                            item.status === "done"
-                              ? 100
-                              : item.status === "error" ||
-                                  item.status === "cancelled"
-                                ? item.progress
-                                : item.progress
-                          }%`,
-                        }}
+                        style={{ width: `${item.progress}%` }}
                       />
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -535,69 +751,6 @@ export function TranscribeModal({
                   </li>
                 ))}
               </ul>
-            ) : null}
-
-            <div className="mt-5 space-y-4">
-              <LanguageSelect
-                value={options.language}
-                disabled={busy}
-                onChange={(language) => setOptions((o) => ({ ...o, language }))}
-              />
-              <ModePicker
-                value={options.mode}
-                disabled={busy}
-                onChange={(mode) => setOptions((o) => ({ ...o, mode }))}
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setMoreOpen((v) => !v)}
-              className="mt-4 text-sm font-semibold text-coral hover:underline"
-            >
-              {moreOpen ? "Hide" : "Speaker recognition & more settings"}
-            </button>
-
-            {moreOpen ? (
-              <div className="mt-3 space-y-2.5 rounded-2xl border border-border/70 bg-mist/50 p-3.5">
-                <Toggle
-                  label="Recognize speakers"
-                  hint={
-                    isUnlimited
-                      ? "Labels who spoke when (provider support pending verification)"
-                      : "Requires Unlimited plan"
-                  }
-                  checked={options.speakers}
-                  disabled={!isUnlimited}
-                  onChange={(speakers) =>
-                    setOptions((o) => ({ ...o, speakers }))
-                  }
-                />
-                <Toggle
-                  label="Transcribe to English"
-                  hint="Forces English output language"
-                  checked={options.transcribeToEnglish}
-                  onChange={(transcribeToEnglish) =>
-                    setOptions((o) => ({ ...o, transcribeToEnglish }))
-                  }
-                />
-                <Toggle
-                  label="Filter filler words"
-                  hint="Stored as a preference; applied when the processor supports it"
-                  checked={options.filterFillers}
-                  onChange={(filterFillers) =>
-                    setOptions((o) => ({ ...o, filterFillers }))
-                  }
-                />
-                <Toggle
-                  label="Prefer timestamps"
-                  hint="Keep timed segments for the editor and future subtitle exports"
-                  checked={options.preferTimestamps}
-                  onChange={(preferTimestamps) =>
-                    setOptions((o) => ({ ...o, preferTimestamps }))
-                  }
-                />
-              </div>
             ) : null}
 
             {message ? (

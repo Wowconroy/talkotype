@@ -44,7 +44,12 @@ export function TranscriptsTable({
   loading = false,
   onOpenDialog,
 }: Props) {
+  const router = useRouter();
   const [menuId, setMenuId] = useState<string | null>(null);
+
+  function openTranscript(id: string) {
+    router.push(`/app/transcripts/${id}`);
+  }
 
   if (loading) {
     return (
@@ -101,7 +106,17 @@ export function TranscriptsTable({
             {items.map((row) => (
               <tr
                 key={row.id}
-                className="border-b border-border/50 last:border-0 hover:bg-mist/40"
+                tabIndex={0}
+                role="link"
+                aria-label={`Open transcript ${row.title}`}
+                onClick={() => openTranscript(row.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openTranscript(row.id);
+                  }
+                }}
+                className="cursor-pointer border-b border-border/50 last:border-0 hover:bg-mist/40 focus-visible:bg-mist/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sea/50"
               >
                 <td className="px-4 py-3.5">
                   <div className="flex items-start gap-2.5">
@@ -136,7 +151,11 @@ export function TranscriptsTable({
                 <td className="px-4 py-3.5">
                   <StatusPill row={row} />
                 </td>
-                <td className="px-4 py-3.5 text-right">
+                <td
+                  className="px-4 py-3.5 text-right"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
                   <RowMenu
                     row={row}
                     open={menuId === row.id}
