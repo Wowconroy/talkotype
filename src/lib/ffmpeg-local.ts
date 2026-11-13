@@ -62,7 +62,8 @@ function safeName(filename: string) {
 
 /**
  * Full-file extract to mono 16 kHz MP3 (small + Groq-friendly).
- * 128 kbps keeps quiet speech clearer than 64 kbps while staying under limits.
+ * 64 kbps keeps a 3-hour file under Groq’s ~100 MB upload ceiling
+ * (~86 MB for 3h mono) while staying clear enough for speech.
  */
 export async function extractAudioFile(params: {
   sourceBytes: Uint8Array;
@@ -95,7 +96,7 @@ export async function extractAudioFile(params: {
       "-c:a",
       "libmp3lame",
       "-b:a",
-      "128k",
+      "64k",
     ];
     if (params.maxSeconds && params.maxSeconds > 0) {
       args.push("-t", String(params.maxSeconds));
@@ -183,7 +184,39 @@ export function looksLikeVideo(params: {
   const type = (params.contentType || "").toLowerCase();
   if (type.startsWith("video/")) return true;
   const name = (params.filename || "").toLowerCase();
-  return /\.(mp4|mov|m4v|webm|mkv|avi|wmv)$/i.test(name);
+  return /\.(mp4|mov|m4v|mpeg|mpg|webm|mkv|avi|wmv)$/i.test(name);
+}
+
+/**
+ * Formats Groq Whisper accepts without a prior ffmpeg normalize.
+ * WMA / WMV / AAC / OPUS / MOV still upload fine — we transcode first.
+ */
+export const GROQ_NATIVE_EXTENSIONS = new Set([
+  "mp3",
+  "mp4",
+  "m4a",
+  "wav",
+  "ogg",
+  "flac",
+  "webm",
+  "mpeg",
+  "mpg",
+  "mpga",
+]);
+
+/** True when we must extract/normalize before sending audio to Groq. */
+export function needsProviderNormalize(params: {
+  filename?: string | null;
+  contentType?: string | null;
+  sizeBytes?: number | null;
+}): boolean {
+  if (looksLikeVideo(params)) return true;
+  const size = params.sizeBytes ?? 0;
+  if (size > 20 * 1024 * 1024) return true;
+  const name = (params.filename || "").toLowerCase();
+  const ext = name.includes(".") ? name.split(".").pop() || "" : "";
+  if (!ext) return true;
+  return !GROQ_NATIVE_EXTENSIONS.has(ext);
 }
 
 /** Groq Whisper practical upload ceiling. */

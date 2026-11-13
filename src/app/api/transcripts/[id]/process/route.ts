@@ -5,12 +5,13 @@ import {
   extractAudioFile,
   GROQ_MAX_UPLOAD_BYTES,
   isFfmpegAvailable,
-  looksLikeVideo,
+  needsProviderNormalize,
 } from "@/lib/ffmpeg-local";
 import {
   clipTranscriptToSeconds,
   FREE_TRANSCRIBE_SECONDS,
   normalizePlan,
+  UNLIMITED_MAX_SECONDS,
 } from "@/lib/plan-limits";
 import {
   buildObjectKey,
@@ -166,20 +167,22 @@ export async function POST(_request: Request, { params }: Params) {
       .eq("id", user.id)
       .maybeSingle();
     const planEarly = normalizePlan(ownerProfileEarly?.plan);
+    // Free: first 30 min. Unlimited: hard-cap at the advertised 3 hours.
     const maxSeconds =
-      planEarly === "free" ? FREE_TRANSCRIBE_SECONDS : null;
+      planEarly === "free" ? FREE_TRANSCRIBE_SECONDS : UNLIMITED_MAX_SECONDS;
 
-    const videoLike = looksLikeVideo({
-      filename,
-      contentType: media.content_type || contentType,
-    });
     const tooBigForGroq =
       bytes.byteLength > GROQ_MAX_UPLOAD_BYTES ||
       (typeof media.size_bytes === "number" &&
         media.size_bytes > GROQ_MAX_UPLOAD_BYTES);
-    // Even mid-size MP4s often fail raw Groq upload from Vercel — always extract.
+    // Videos + WMA/AAC/OPUS/etc + anything >20MB → mono MP3 before Groq.
     const shouldExtract =
-      videoLike || tooBigForGroq || bytes.byteLength > 20 * 1024 * 1024;
+      tooBigForGroq ||
+      needsProviderNormalize({
+        filename,
+        contentType: media.content_type || contentType,
+        sizeBytes: bytes.byteLength,
+      });
 
     let audioBytes = bytes;
     let audioFilename = filename;

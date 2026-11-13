@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { isAcceptedMediaFile } from "./accepted-media";
+import { needsProviderNormalize } from "./ffmpeg-local";
 import {
   FREE_MAX_CONCURRENT,
   UNLIMITED_MAX_CONCURRENT,
@@ -45,6 +46,20 @@ describe("format allowlist", () => {
       contentType: "application/pdf",
     });
     assert.equal(r.ok, false);
+  });
+
+  it("normalizes WMA/AAC/OPUS/WMV before Groq", () => {
+    for (const name of ["a.wma", "b.aac", "c.opus", "d.wmv", "e.mov"]) {
+      assert.equal(
+        needsProviderNormalize({ filename: name, sizeBytes: 1024 }),
+        true,
+        name,
+      );
+    }
+    assert.equal(
+      needsProviderNormalize({ filename: "ok.mp3", sizeBytes: 1024 }),
+      false,
+    );
   });
 });
 

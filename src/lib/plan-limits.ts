@@ -6,10 +6,7 @@ export const FREE_DAILY_TRANSCRIPTS = 3;
 /** Free: only the first N seconds are transcribed (longer files are clipped). */
 export const FREE_TRANSCRIBE_SECONDS = 30 * 60;
 
-/**
- * Unlimited: verified product target is 3 hours per file.
- * Duration probe/FFmpeg enforcement is not wired yet — UI/API still advertise 3h.
- */
+/** Unlimited: hard cap per file (enforced on ffmpeg extract / worker probe). */
 export const UNLIMITED_MAX_SECONDS = 3 * 60 * 60;
 export const UNLIMITED_MAX_HOURS = UNLIMITED_MAX_SECONDS / 3600;
 
