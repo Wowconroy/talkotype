@@ -5,7 +5,7 @@ import { allPosts } from "@/content/blog";
 export const metadata: Metadata = {
   title: "Blog",
   description:
-    "SEO guides and practical notes on video transcription, MP3 to text, meeting notes, captions, and cleaner Talkotype workflows.",
+    "Guides for Zoom and Meet recordings, voice memos, M4A/WAV/MOV files, captions, speaker labels, and cleaner Talkotype workflows.",
   alternates: { canonical: "/blog" },
 };
 

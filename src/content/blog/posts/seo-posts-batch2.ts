@@ -1116,4 +1116,320 @@ export const seoPostsBatch2: BlogPost[] = [
       },
     ],
   },
+{
+    slug: "how-to-transcribe-customer-call",
+    title: "How to Transcribe a Customer Call Recording",
+    description:
+      "Turn support and sales call recordings into searchable text. Consent notes, Talkotype workflow, and a synthetic cleanup sample.",
+    date: "2026-11-13",
+    primaryQuery: "how to transcribe customer call",
+    intent: "commercial",
+    country: "US",
+    coverTheme: "coral",
+    coverIcon: "users",
+    readingMinutes: 7,
+    related: [
+      "how-to-label-speakers-in-transcript",
+      "how-to-transcribe-confidential-recordings",
+      "meeting-recording-to-action-items",
+    ],
+    sources: [],
+    seoNotes: "B2B adjacent; consent emphasized.",
+    blocks: [
+      {
+        type: "p",
+        text: "Customer calls are dense with product language, objections, and promises. A transcript lets support and product search those moments later — if you have permission to keep the recording.",
+      },
+      {
+        type: "callout",
+        title: "Consent and policy",
+        text: "Follow your company’s recording notice and local rules. Do not upload calls you are not allowed to retain. For sensitive material, read [transcribe confidential recordings](/blog/how-to-transcribe-confidential-recordings).",
+      },
+      {
+        type: "h2",
+        text: "Workflow",
+      },
+      {
+        type: "ol",
+        items: [
+          "Export the call audio or video from your dialer or meeting tool.",
+          "Upload to [Talkotype](/app). On Unlimited, enable speaker labels for agent vs customer.",
+          "Tag the transcript title with ticket ID or account name.",
+          "Pull quotes into the CRM; turn decisions into tasks like [meeting action items](/blog/meeting-recording-to-action-items).",
+        ],
+      },
+      {
+        type: "sample",
+        label: "Support call excerpt (synthetic)",
+        note: "Fictional brands and names.",
+        lines: [
+          {
+            time: "00:06:40",
+            speaker: "Agent",
+            text: "I can extend the trial three days while billing finishes the yearly switch.",
+          },
+          {
+            time: "00:06:48",
+            speaker: "Customer",
+            text: "That works. Please email confirmation to ops at their domain.",
+          },
+        ],
+      },
+      {
+        type: "cta",
+        text: "Transcribe the next approved call recording",
+        href: "/signup",
+        label: "Start free",
+      },
+    ],
+  },
+  {
+    slug: "how-to-transcribe-journalism-interview",
+    title: "How to Transcribe a Journalism Interview",
+    description:
+      "Keep quotes accurate with timestamps, clean verbatim choices, and a Talkotype review pass built for reporters.",
+    date: "2026-11-13",
+    primaryQuery: "how to transcribe journalism interview",
+    intent: "informational",
+    country: "US",
+    coverTheme: "ink",
+    coverIcon: "users",
+    readingMinutes: 8,
+    related: [
+      "how-to-transcribe-research-interview",
+      "verbatim-vs-clean-verbatim",
+      "click-transcript-timestamp-to-play-audio",
+    ],
+    sources: [],
+    seoNotes: "Distinct from research interview; quote integrity focus.",
+    blocks: [
+      {
+        type: "p",
+        text: "Journalism interviews need trustworthy quotes. Automatic text is a draft, not a finished citation. Use timestamps so every published line can be checked against audio.",
+      },
+      {
+        type: "h2",
+        text: "Recording habits that help later",
+      },
+      {
+        type: "ul",
+        items: [
+          "Ask permission to record before you start.",
+          "Use a dedicated recorder or solid phone mic — cafés cost accuracy.",
+          "Note spellings of names in your notebook during the chat.",
+        ],
+      },
+      {
+        type: "h2",
+        text: "From file to publishable quote",
+      },
+      {
+        type: "ol",
+        items: [
+          "Upload the interview to [Talkotype](/signup).",
+          "Choose clean verbatim vs stricter verbatim using [verbatim vs clean verbatim](/blog/verbatim-vs-clean-verbatim) as your style guide.",
+          "Click timestamps before any quote hits the CMS.",
+          "Export DOCX on Unlimited for editor review, or TXT for paste into the CMS.",
+        ],
+      },
+      {
+        type: "sample",
+        label: "Quote check (synthetic)",
+        note: "Demo only.",
+        lines: [
+          {
+            mark: "bad",
+            text: "Draft quote without stamp: “We never tested the billing portal.”",
+          },
+          {
+            mark: "good",
+            time: "00:19:04",
+            text: "Verified: “We never tested the billing portal on Safari.”",
+          },
+        ],
+      },
+      {
+        type: "p",
+        text: "Academic oral histories have overlapping needs — see [research interview transcription](/blog/how-to-transcribe-research-interview).",
+      },
+      {
+        type: "cta",
+        text: "Transcribe your next interview draft",
+        href: "/signup",
+        label: "Try Talkotype",
+      },
+    ],
+  },
+  {
+    slug: "free-transcription-daily-limit-tips",
+    title: "How to Get the Most from Talkotype Free",
+    description:
+      "Work inside three free transcripts a day and a 30-minute window per file. Practical tips for short clips, exports, and when Unlimited is worth it.",
+    date: "2026-11-13",
+    primaryQuery: "free transcription daily limit",
+    intent: "commercial",
+    country: "US",
+    coverTheme: "lemon",
+    coverIcon: "clock",
+    readingMinutes: 6,
+    related: [
+      "how-to-transcribe-long-recording",
+      "how-to-organize-transcripts",
+      "txt-vs-docx-vs-srt-vs-vtt",
+    ],
+    sources: [],
+    seoNotes: "Captures Free-plan commercial queries; accurate limits.",
+    blocks: [
+      {
+        type: "p",
+        text: "Talkotype Free is intentionally small: three transcripts per day, the first 30 minutes of each file, TXT export, and seven-day media storage. Used well, that covers voice memos, short meetings, and draft captions research.",
+      },
+      {
+        type: "h2",
+        text: "Stretch the daily three",
+      },
+      {
+        type: "ul",
+        items: [
+          "Trim dead air before upload so the 30-minute window holds speech, not silence.",
+          "Batch tiny memos only when you truly need separate files — each upload counts.",
+          "Export TXT the same day; Free media expires after seven days.",
+          "Organize titles so you do not burn a credit re-uploading the same clip — [organize transcripts](/blog/how-to-organize-transcripts).",
+        ],
+      },
+      {
+        type: "table",
+        headers: ["Need", "Free", "Unlimited"],
+        rows: [
+          ["Daily volume", "3 transcripts", "No daily cap"],
+          ["File length", "First 30 minutes", "Up to 3 hours / 5 GB"],
+          ["Exports", "TXT", "PDF, DOCX, SRT, VTT"],
+          ["Speakers", "—", "Speaker labels"],
+        ],
+      },
+      {
+        type: "p",
+        text: "When you regularly hit the wall mid-project, compare plans on [pricing](/pricing). Long-file tactics also live in [how to transcribe a long recording](/blog/how-to-transcribe-long-recording).",
+      },
+      {
+        type: "cta",
+        text: "Still exploring? Stay on Free.",
+        href: "/signup",
+        label: "Create a free account",
+      },
+    ],
+  },
+  {
+    slug: "how-to-export-transcript-to-pdf",
+    title: "How to Export a Transcript to PDF",
+    description:
+      "Create a clean PDF of your Talkotype transcript on Unlimited for reviews, archives, and email attachments.",
+    date: "2026-11-13",
+    primaryQuery: "export transcript to pdf",
+    intent: "informational",
+    country: "US",
+    coverTheme: "blush",
+    coverIcon: "doc",
+    readingMinutes: 5,
+    related: [
+      "txt-vs-docx-vs-srt-vs-vtt",
+      "how-to-share-a-transcript",
+      "how-to-fix-ai-transcript",
+    ],
+    sources: [],
+    seoNotes: "Export long-tail; Unlimited PDF.",
+    blocks: [
+      {
+        type: "p",
+        text: "PDF is for people who will not open your editor. After you clean the transcript, Unlimited can export a PDF you can email or archive.",
+      },
+      {
+        type: "ol",
+        items: [
+          "Finish cleanup in Talkotype — wrong names look permanent in PDF.",
+          "Open export and choose **PDF** (Unlimited).",
+          "Open the file once to confirm fonts and page breaks look sane before you send it.",
+        ],
+      },
+      {
+        type: "callout",
+        title: "Free vs Unlimited",
+        text: "Free exports TXT. PDF, DOCX, SRT, and VTT are Unlimited — details on [pricing](/pricing) and in [TXT vs DOCX vs SRT vs VTT](/blog/txt-vs-docx-vs-srt-vs-vtt).",
+      },
+      {
+        type: "ul",
+        items: [
+          "Need comments? Prefer DOCX.",
+          "Need a quick share without attachments? Use a [share link](/blog/how-to-share-a-transcript).",
+          "Need captions? Export SRT instead of PDF.",
+        ],
+      },
+      {
+        type: "cta",
+        text: "Ready for a stakeholder-friendly PDF?",
+        href: "/pricing",
+        label: "Go Unlimited",
+      },
+    ],
+  },
+  {
+    slug: "voice-dictation-to-document",
+    title: "How to Turn Voice Dictation into an Editable Document",
+    description:
+      "Record spoken drafts on your phone, transcribe them in Talkotype, and shape the text into a newsletter, brief, or essay.",
+    date: "2026-11-13",
+    primaryQuery: "voice dictation to document",
+    intent: "informational",
+    country: "US",
+    coverTheme: "mint",
+    coverIcon: "audio",
+    readingMinutes: 6,
+    related: [
+      "how-to-transcribe-iphone-voice-memo",
+      "how-to-convert-m4a-to-text",
+      "webinar-recording-to-blog-post",
+    ],
+    sources: [],
+    seoNotes: "Writing workflow; pairs with voice memo guides.",
+    blocks: [
+      {
+        type: "p",
+        text: "Dictation gets ideas out of your head. Transcription turns the recording into something you can outline, cut, and ship. Talkotype sits in the middle: audio in, editable text out.",
+      },
+      {
+        type: "h2",
+        text: "A practical loop",
+      },
+      {
+        type: "ol",
+        items: [
+          "Record a Voice Memo or similar M4A — see [iPhone Voice Memo transcription](/blog/how-to-transcribe-iphone-voice-memo).",
+          "Upload to [Talkotype](/app) and transcribe.",
+          "Delete verbal warm-ups (“um, okay so…”) for a clean-verbatim draft.",
+          "Paste into Docs/Notion and add headings. For longer talks, borrow structure from [webinar to blog post](/blog/webinar-recording-to-blog-post).",
+        ],
+      },
+      { type: "demo", variant: "waveform" },
+      {
+        type: "sample",
+        label: "Dictation → cleaned paragraph (synthetic)",
+        lines: [
+          {
+            mark: "bad",
+            text: "okay so um the point is we should explain yearly billing without the fog machine",
+          },
+          {
+            mark: "good",
+            text: "The point is we should explain yearly billing without the fog machine.",
+          },
+        ],
+      },
+      {
+        type: "cta",
+        text: "Talk the draft, then type less",
+        href: "/signup",
+        label: "Transcribe a dictation",
+      },
+    ],
+  },
 ];
