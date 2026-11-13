@@ -10,7 +10,7 @@ type Props = {
 };
 
 const MODE_ART: Record<TranscriptionMode, { src: string; alt: string }> = {
-  fast: { src: "/modes/swift.png", alt: "Cheetah mascot — Swift mode" },
+  fast: { src: "/modes/swift.png", alt: "Cheetah — Swift mode" },
   balanced: { src: "/modes/steady.png", alt: "Dolphin leaping — Steady mode" },
   accurate: {
     src: "/modes/deep.png",
