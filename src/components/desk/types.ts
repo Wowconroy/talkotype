@@ -1,3 +1,5 @@
+export type TranscriptionMode = "fast" | "balanced" | "accurate";
+
 export type DeskTranscript = {
   id: string;
   title: string;
@@ -12,6 +14,9 @@ export type DeskTranscript = {
   updated_at: string;
   content_revision: number;
   model: string | null;
+  requested_mode?: TranscriptionMode | string | null;
+  job_stage?: string | null;
+  progress_pct?: number | null;
   media_size_bytes?: number | null;
   media_expires_at?: string | null;
   share_enabled?: boolean;
@@ -39,17 +44,33 @@ export type QuotaSnapshot = {
 
 export type DeskPlan = "free" | "unlimited" | string;
 
-export type TranscriptionMode = "fast" | "balanced" | "accurate";
-
+/** Maps product modes → Whisper models (Steady shares Turbo until media prep). */
 export const MODE_TO_MODEL: Record<TranscriptionMode, string> = {
   fast: "whisper-large-v3-turbo",
   balanced: "whisper-large-v3-turbo",
   accurate: "whisper-large-v3",
 };
 
+export const MODE_PRODUCT_LABEL: Record<TranscriptionMode, string> = {
+  fast: "Swift",
+  balanced: "Steady",
+  accurate: "Deep",
+};
+
 export const MODEL_TO_MODE_LABEL: Record<string, string> = {
-  "whisper-large-v3-turbo": "Balanced",
-  "whisper-large-v3": "Accurate",
+  "whisper-large-v3-turbo": "Steady",
+  "whisper-large-v3": "Deep",
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  queued: "Queued",
+  uploading: "Uploading",
+  preparing_audio: "Preparing audio",
+  transcribing: "Transcribing",
+  publishing: "Finalising",
+  awaiting_source: "Waiting for source",
+  ready: "Ready",
+  failed: "Failed",
 };
 
 export const AUDIO_LANGUAGES = [
@@ -143,21 +164,52 @@ export function statusLabel(row: DeskTranscript) {
   if (row.source_kind === "link" && row.status === "queued") {
     return "Link queued";
   }
+  if (row.status === "ready") return "Ready";
+  if (row.status === "failed") return "Failed";
+
+  const stage = row.job_stage;
+  if (stage && STAGE_LABELS[stage]) {
+    const pct =
+      typeof row.progress_pct === "number" &&
+      row.progress_pct > 0 &&
+      row.progress_pct < 100
+        ? ` · ${row.progress_pct}%`
+        : "";
+    return `${STAGE_LABELS[stage]}${pct}`;
+  }
+
   switch (row.status) {
     case "queued":
       return "Queued";
     case "processing":
       return "Processing";
-    case "ready":
-      return "Ready";
-    case "failed":
-      return "Failed";
     default:
       return row.status;
   }
 }
 
-export function modeLabel(model: string | null) {
+export function modeLabel(
+  model: string | null,
+  requestedMode?: string | null,
+) {
+  if (
+    requestedMode === "fast" ||
+    requestedMode === "balanced" ||
+    requestedMode === "accurate"
+  ) {
+    return MODE_PRODUCT_LABEL[requestedMode];
+  }
   if (!model) return "—";
   return MODEL_TO_MODE_LABEL[model] ?? model.replace("whisper-", "");
+}
+
+export function isActiveDeskStatus(row: DeskTranscript) {
+  return (
+    row.status === "queued" ||
+    row.status === "processing" ||
+    (row.job_stage != null &&
+      !["ready", "failed"].includes(row.job_stage) &&
+      row.status !== "ready" &&
+      row.status !== "failed")
+  );
 }

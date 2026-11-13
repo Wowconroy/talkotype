@@ -7,11 +7,12 @@ import { DeskSidebar } from "./desk-sidebar";
 import type { FolderModalMode } from "./folder-modal";
 import type { TranscriptDialog } from "./transcript-action-modals";
 import { TranscriptsTable } from "./transcripts-table";
-import type {
-  DeskFolder,
-  DeskTranscript,
-  DeskUsage,
-  QuotaSnapshot,
+import {
+  isActiveDeskStatus,
+  type DeskFolder,
+  type DeskTranscript,
+  type DeskUsage,
+  type QuotaSnapshot,
 } from "./types";
 
 const FolderModal = dynamic(
@@ -123,6 +124,16 @@ export function DeskShell({ displayName, initial }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [transcribeOpen, importOpen]);
+
+  // Poll while jobs are active so returning users see real stages/progress.
+  useEffect(() => {
+    const hasActive = transcripts.some(isActiveDeskStatus);
+    if (!hasActive) return;
+    const id = window.setInterval(() => {
+      void loadAll({ silent: true });
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [transcripts, loadAll]);
 
   const activeFolder = folders.find((f) => f.id === activeView) ?? null;
 

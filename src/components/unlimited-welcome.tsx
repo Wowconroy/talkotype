@@ -23,8 +23,8 @@ const perks = [
   },
   {
     icon: Rocket,
-    title: "10 hour / 5 GB uploads",
-    copy: "Each file can be up to 10 hours or 5 GB — and you can upload up to 50 files at a time.",
+    title: "3 hour / 5 GB uploads",
+    copy: "Each file can be up to 3 hours or 5 GB — and you can upload up to 20 files in one batch.",
     tone: "bg-lemon text-ink",
   },
   {

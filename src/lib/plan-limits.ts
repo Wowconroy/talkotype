@@ -6,12 +6,18 @@ export const FREE_DAILY_TRANSCRIPTS = 3;
 /** Free: only the first N seconds are transcribed (longer files are clipped). */
 export const FREE_TRANSCRIBE_SECONDS = 30 * 60;
 
-/** Unlimited: hard ceiling per file. */
-export const UNLIMITED_MAX_SECONDS = 10 * 60 * 60;
+/**
+ * Unlimited: initial product target is 3 hours per file.
+ * (Size still capped separately; duration probe/FFmpeg not wired yet.)
+ */
+export const UNLIMITED_MAX_SECONDS = 3 * 60 * 60;
 
-/** Concurrent processing slots. */
+/** Concurrent processing / batch slots. */
 export const FREE_MAX_CONCURRENT = 1;
-export const UNLIMITED_MAX_CONCURRENT = 50;
+/** Paid: up to 20 files in one batch; upload pool uses the same bound. */
+export const UNLIMITED_MAX_CONCURRENT = 20;
+/** How many paid uploads transfer over the network at once. */
+export const UNLIMITED_UPLOAD_POOL = 4;
 
 /** Max upload bytes. */
 export const FREE_MAX_UPLOAD_BYTES = 1 * 1024 * 1024 * 1024; // 1 GB

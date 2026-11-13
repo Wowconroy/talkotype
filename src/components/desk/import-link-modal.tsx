@@ -75,11 +75,13 @@ export function ImportLinkModal({
           sourceUrl: trimmed,
           title: deriveTitle(trimmed),
           requestedLanguage: language,
+          transcriptionMode: options.mode,
           transcriptionModel: MODE_TO_MODEL[options.mode],
           speakers: options.speakers,
           folderId,
           filterFillers: options.filterFillers,
           preferTimestamps: options.preferTimestamps,
+          transcribeToEnglish: options.transcribeToEnglish,
         }),
       });
       const data = await res.json();

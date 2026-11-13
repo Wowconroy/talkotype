@@ -56,8 +56,8 @@ const unlimitedFeatures = [
   },
   {
     icon: Rocket,
-    title: "10 hour / 5 GB uploads",
-    copy: "Each file can be up to 10 hours or 5 GB. Upload up to 50 files at a time.",
+    title: "3 hour / 5 GB uploads",
+    copy: "Each file can be up to 3 hours or 5 GB. Upload up to 20 files in one batch.",
     tone: "coral" as const,
   },
   {

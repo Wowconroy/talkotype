@@ -3,18 +3,20 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Link2, Upload, X } from "lucide-react";
+import { ACCEPT_ATTR, isAcceptedMediaFile } from "@/lib/accepted-media";
+import {
+  formatBytes,
+  FREE_TRANSCRIBE_SECONDS,
+  maxUploadBytes,
+  UNLIMITED_MAX_CONCURRENT,
+  UNLIMITED_UPLOAD_POOL,
+} from "@/lib/plan-limits";
 import { LanguageSelect } from "./language-select";
 import { ModePicker } from "./mode-picker";
 import {
   isQuotaLimitError,
   QuotaLimitNotice,
 } from "./quota-limit-notice";
-import {
-  formatBytes,
-  FREE_TRANSCRIBE_SECONDS,
-  maxUploadBytes,
-  UNLIMITED_MAX_CONCURRENT,
-} from "@/lib/plan-limits";
 import {
   DEFAULT_TRANSCRIBE_OPTIONS,
   MODE_TO_MODEL,
@@ -31,6 +33,71 @@ type Props = {
   onUploaded: (quota?: QuotaSnapshot | null) => void;
   onOpenImportLink: () => void;
 };
+
+type UploadItem = {
+  id: string;
+  name: string;
+  progress: number;
+  status: "queued" | "uploading" | "done" | "error" | "cancelled";
+  error?: string;
+  abort?: () => void;
+};
+
+function putWithProgress(
+  url: string,
+  file: File,
+  headers: HeadersInit,
+  onProgress: (pct: number) => void,
+): { promise: Promise<void>; abort: () => void } {
+  const xhr = new XMLHttpRequest();
+  const promise = new Promise<void>((resolve, reject) => {
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else
+        reject(
+          new Error(
+            `Upload to storage failed (${xhr.status}). Check R2 CORS for talkotype.app.`,
+          ),
+        );
+    };
+    xhr.onerror = () => reject(new Error("Network request failed during upload."));
+    xhr.onabort = () => reject(new Error("Upload cancelled."));
+    xhr.open("PUT", url);
+    const headerRecord =
+      headers instanceof Headers
+        ? Object.fromEntries(headers.entries())
+        : Array.isArray(headers)
+          ? Object.fromEntries(headers)
+          : headers;
+    for (const [key, value] of Object.entries(headerRecord)) {
+      if (value != null) xhr.setRequestHeader(key, String(value));
+    }
+    xhr.send(file);
+  });
+  return { promise, abort: () => xhr.abort() };
+}
+
+async function runPool<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+) {
+  let index = 0;
+  const runners = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    async () => {
+      while (index < items.length) {
+        const current = items[index++];
+        await worker(current);
+      }
+    },
+  );
+  await Promise.all(runners);
+}
 
 export function TranscribeModal({
   open,
@@ -51,41 +118,56 @@ export function TranscribeModal({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [hitLimit, setHitLimit] = useState(false);
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [pendingPick, setPendingPick] = useState<File[] | null>(null);
 
   useEffect(() => {
     if (!open) {
       setHitLimit(false);
       setError(null);
       setMessage(null);
+      setUploads([]);
+      setPendingPick(null);
+      setBusy(false);
     }
   }, [open]);
 
   if (!open) return null;
 
   const blocked = limitReached || hitLimit;
-
   const uploadCap = maxUploadBytes(isUnlimited ? "unlimited" : "free");
   const freeMinutes = Math.round(FREE_TRANSCRIBE_SECONDS / 60);
 
-  async function uploadFile(file: File) {
-    if (blocked) {
-      setHitLimit(true);
+  function patchUpload(id: string, patch: Partial<UploadItem>) {
+    setUploads((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+  }
+
+  async function uploadOne(file: File, itemId: string) {
+    const accepted = isAcceptedMediaFile({
+      filename: file.name,
+      contentType: file.type,
+    });
+    if (!accepted.ok) {
+      patchUpload(itemId, { status: "error", error: accepted.error });
       return;
     }
     if (file.size > uploadCap) {
-      setError(
-        `“${file.name}” is too large for your plan (max ${formatBytes(uploadCap)}).`,
-      );
+      patchUpload(itemId, {
+        status: "error",
+        error: `Too large for your plan (max ${formatBytes(uploadCap)}).`,
+      });
       return;
     }
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    let step = "start";
+
+    let step = "create";
     try {
       const language = options.transcribeToEnglish
         ? "en"
         : options.language || undefined;
+
+      patchUpload(itemId, { status: "uploading", progress: 0 });
 
       step = "create";
       const createRes = await fetch("/api/transcripts", {
@@ -96,11 +178,13 @@ export function TranscribeModal({
           contentType: file.type || "application/octet-stream",
           sizeBytes: file.size,
           requestedLanguage: language,
+          transcriptionMode: options.mode,
           transcriptionModel: MODE_TO_MODEL[options.mode],
           speakers: options.speakers,
           folderId,
           filterFillers: options.filterFillers,
           preferTimestamps: options.preferTimestamps,
+          transcribeToEnglish: options.transcribeToEnglish,
         }),
       });
       const created = await createRes.json();
@@ -110,22 +194,24 @@ export function TranscribeModal({
           onUploaded(
             (created as { quota?: QuotaSnapshot | null }).quota ?? null,
           );
+          patchUpload(itemId, {
+            status: "error",
+            error: created.error || "Plan limit reached",
+          });
           return;
         }
         throw new Error(created.error || "Could not start upload");
       }
 
       step = "storage";
-      const put = await fetch(created.upload.url as string, {
-        method: "PUT",
-        headers: created.upload.headers as HeadersInit,
-        body: file,
-      });
-      if (!put.ok) {
-        throw new Error(
-          `Upload to storage failed (${put.status}). Check R2 CORS for talkotype.app.`,
-        );
-      }
+      const put = putWithProgress(
+        created.upload.url as string,
+        file,
+        created.upload.headers as HeadersInit,
+        (pct) => patchUpload(itemId, { progress: pct }),
+      );
+      patchUpload(itemId, { abort: put.abort });
+      await put.promise;
 
       step = "queue";
       const complete = await fetch(
@@ -139,37 +225,82 @@ export function TranscribeModal({
         );
       }
 
-      setMessage(`Uploaded “${file.name}”. Transcription queued.`);
+      patchUpload(itemId, { status: "done", progress: 100, abort: undefined });
       onUploaded(
         (created as { quota?: QuotaSnapshot | null }).quota ?? null,
       );
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Upload failed";
+      if (raw === "Upload cancelled.") {
+        patchUpload(itemId, { status: "cancelled", error: raw });
+        return;
+      }
       const hint =
         raw === "Failed to fetch" || /network|cors/i.test(raw)
           ? step === "storage"
             ? "Browser blocked the upload to Cloudflare R2 (usually CORS)."
             : "Network request failed. Check connection and try again."
           : raw;
-      setError(hint);
-    } finally {
-      setBusy(false);
+      patchUpload(itemId, { status: "error", error: hint });
     }
   }
 
   async function uploadFiles(fileList: FileList | File[]) {
-    const files = Array.from(fileList).slice(
-      0,
-      isUnlimited ? UNLIMITED_MAX_CONCURRENT : 1,
+    const all = Array.from(fileList);
+    if (all.length === 0) return;
+
+    if (!isUnlimited) {
+      if (all.length > 1) {
+        setPendingPick(all.slice(0, 12));
+        setError(
+          "Free plan allows one active upload at a time. Choose which file to upload.",
+        );
+        return;
+      }
+    } else if (all.length > UNLIMITED_MAX_CONCURRENT) {
+      setError(
+        `Unlimited uploads up to ${UNLIMITED_MAX_CONCURRENT} files per batch. Extra files were ignored.`,
+      );
+    }
+
+    const files = all.slice(0, isUnlimited ? UNLIMITED_MAX_CONCURRENT : 1);
+    setPendingPick(null);
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+
+    const items: UploadItem[] = files.map((file, i) => ({
+      id: `${Date.now()}-${i}-${file.name}`,
+      name: file.name,
+      progress: 0,
+      status: "queued",
+    }));
+    setUploads(items);
+
+    const work = files.map((file, i) => ({ file, id: items[i].id }));
+    const concurrency = isUnlimited ? UNLIMITED_UPLOAD_POOL : 1;
+    await runPool(work, concurrency, async ({ file, id }) => {
+      await uploadOne(file, id);
+    });
+
+    setBusy(false);
+    setMessage(
+      files.length === 1
+        ? `Finished with “${files[0].name}”.`
+        : `Finished batch of ${files.length} files.`,
     );
-    if (files.length === 0) return;
-    if (!isUnlimited && files.length > 1) {
-      setError("Free plan uploads one file at a time.");
-      return;
-    }
-    for (const file of files) {
-      await uploadFile(file);
-    }
+  }
+
+  function cancelUpload(id: string) {
+    setUploads((prev) => {
+      const item = prev.find((u) => u.id === id);
+      item?.abort?.();
+      return prev.map((u) =>
+        u.id === id
+          ? { ...u, status: "cancelled", error: "Upload cancelled." }
+          : u,
+      );
+    });
   }
 
   return (
@@ -207,6 +338,21 @@ export function TranscribeModal({
         ) : (
           <>
             <div
+              role="button"
+              tabIndex={0}
+              aria-label={
+                isUnlimited
+                  ? "Drop files to upload, or press Enter to browse"
+                  : "Drop a file to upload, or press Enter to browse"
+              }
+              aria-disabled={busy}
+              onKeyDown={(e) => {
+                if (busy) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  inputRef.current?.click();
+                }
+              }}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragging(true);
@@ -218,9 +364,9 @@ export function TranscribeModal({
                 const files = e.dataTransfer.files;
                 if (files?.length && !busy) void uploadFiles(files);
               }}
-              className={`mt-5 rounded-2xl border border-dashed px-5 py-10 text-center transition ${
+              className={`mt-5 rounded-2xl border border-dashed px-5 py-10 text-center transition outline-none focus-visible:ring-2 focus-visible:ring-sea ${
                 dragging
-                  ? "border-coral bg-coral-soft/50"
+                  ? "border-coral bg-coral-soft/50 ring-2 ring-coral/40"
                   : "border-sea/50 bg-secondary/40"
               }`}
             >
@@ -230,14 +376,17 @@ export function TranscribeModal({
               <p className="font-display text-lg font-semibold text-ink">
                 {busy
                   ? "Uploading…"
-                  : isUnlimited
-                    ? "Drop files here"
-                    : "Drop a file here"}
+                  : dragging
+                    ? "Drop to upload"
+                    : isUnlimited
+                      ? "Drop files here"
+                      : "Drop a file here"}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                MP3, WAV, M4A, MP4, and similar · max {formatBytes(uploadCap)}
+                MP3, MP4, M4A, MOV, AAC, WAV, OGG, OPUS, MPEG, WMA, WMV · max{" "}
+                {formatBytes(uploadCap)}
                 {isUnlimited
-                  ? ` · up to ${UNLIMITED_MAX_CONCURRENT} at once`
+                  ? ` · up to ${UNLIMITED_MAX_CONCURRENT} per batch`
                   : ` · first ${freeMinutes} min transcribed`}
               </p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -263,7 +412,7 @@ export function TranscribeModal({
                 ref={inputRef}
                 type="file"
                 className="hidden"
-                accept="audio/*,video/*"
+                accept={ACCEPT_ATTR}
                 multiple={isUnlimited}
                 disabled={busy}
                 onChange={(event) => {
@@ -274,7 +423,7 @@ export function TranscribeModal({
               />
               <p className="mx-auto mt-4 max-w-sm text-xs leading-relaxed text-muted-foreground">
                 {isUnlimited
-                  ? "Unlimited keeps originals forever while your plan is active."
+                  ? "Unlimited keeps originals forever while your plan is active. Target length: up to 3 hours per file."
                   : `Free keeps originals for 7 days. Longer files are clipped to the first ${freeMinutes} minutes.`}{" "}
                 <Link
                   href="/privacy"
@@ -288,6 +437,88 @@ export function TranscribeModal({
                 </Link>
               </p>
             </div>
+
+            {pendingPick ? (
+              <div className="mt-4 rounded-2xl border border-border bg-mist/60 p-3.5">
+                <p className="text-sm font-semibold text-ink">
+                  Choose one file (free plan)
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {pendingPick.map((file) => (
+                    <li key={file.name + file.size}>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void uploadFiles([file])}
+                        className="w-full rounded-xl border border-border bg-white px-3 py-2 text-left text-sm text-ink hover:border-sea"
+                      >
+                        {file.name}{" "}
+                        <span className="text-muted-foreground">
+                          ({formatBytes(file.size)})
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {uploads.length > 0 ? (
+              <ul className="mt-4 space-y-2">
+                {uploads.map((item) => (
+                  <li
+                    key={item.id}
+                    className="rounded-xl border border-border/80 bg-white px-3 py-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate text-sm font-medium text-ink">
+                        {item.name}
+                      </p>
+                      {item.status === "uploading" ||
+                      item.status === "queued" ? (
+                        <button
+                          type="button"
+                          onClick={() => cancelUpload(item.id)}
+                          className="shrink-0 text-xs font-semibold text-coral hover:underline"
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-mist">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          item.status === "error" || item.status === "cancelled"
+                            ? "bg-coral"
+                            : item.status === "done"
+                              ? "bg-sea"
+                              : "bg-coral/80"
+                        }`}
+                        style={{
+                          width: `${
+                            item.status === "done"
+                              ? 100
+                              : item.status === "error" ||
+                                  item.status === "cancelled"
+                                ? item.progress
+                                : item.progress
+                          }%`,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {item.status === "uploading"
+                        ? `Uploading ${item.progress}%`
+                        : item.status === "queued"
+                          ? "Waiting in upload pool…"
+                          : item.status === "done"
+                            ? "Queued for transcription"
+                            : item.error || item.status}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
 
             <div className="mt-5 space-y-4">
               <LanguageSelect
@@ -316,7 +547,7 @@ export function TranscribeModal({
                   label="Recognize speakers"
                   hint={
                     isUnlimited
-                      ? "Labels who spoke when"
+                      ? "Labels who spoke when (provider support pending verification)"
                       : "Requires Unlimited plan"
                   }
                   checked={options.speakers}
@@ -335,7 +566,7 @@ export function TranscribeModal({
                 />
                 <Toggle
                   label="Filter filler words"
-                  hint="Applied when the processor supports it"
+                  hint="Stored as a preference; applied when the processor supports it"
                   checked={options.filterFillers}
                   onChange={(filterFillers) =>
                     setOptions((o) => ({ ...o, filterFillers }))
@@ -343,6 +574,7 @@ export function TranscribeModal({
                 />
                 <Toggle
                   label="Prefer timestamps"
+                  hint="Keep timed segments for the editor and future subtitle exports"
                   checked={options.preferTimestamps}
                   onChange={(preferTimestamps) =>
                     setOptions((o) => ({ ...o, preferTimestamps }))

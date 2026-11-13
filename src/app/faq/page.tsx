@@ -38,7 +38,7 @@ const faqs: FaqItem[] = [
   {
     q: "Can I upload large files?",
     plain:
-      "Yes. Free transcribes the first 30 minutes of a file, one at a time, with 7-day media storage. Unlimited supports up to 10 hours / 5 GB per file, 50 uploads at once, and forever storage.",
+      "Yes. Free transcribes the first 30 minutes of a file, one at a time, with 7-day media storage. Unlimited supports up to 3 hours / 5 GB per file, 20 uploads per batch, and forever storage.",
     a: (
       <>
         Free transcribes the <strong>first 30 minutes</strong> (longer files are
@@ -47,8 +47,8 @@ const faqs: FaqItem[] = [
         <Link href="/pricing" className="font-semibold text-coral hover:underline">
           Unlimited
         </Link>{" "}
-        handles up to <strong>10 hours / 5 GB</strong> per file,{" "}
-        <strong>50 uploads at a time</strong>, and keeps media{" "}
+        handles up to <strong>3 hours / 5 GB</strong> per file,{" "}
+        <strong>20 uploads per batch</strong>, and keeps media{" "}
         <strong>forever</strong>.
       </>
     ),
@@ -251,12 +251,12 @@ const faqs: FaqItem[] = [
   {
     q: "How much can I transcribe?",
     plain:
-      "Free: 3 transcripts per day, first 30 minutes transcribed, 7-day storage. Unlimited: no daily cap, 10 hours / 5 GB per file, 50 at a time, forever storage.",
+      "Free: 3 transcripts per day, first 30 minutes transcribed, 7-day storage. Unlimited: no daily cap, 3 hours / 5 GB per file, 20 per batch, forever storage.",
     a: (
       <>
         <strong>Free:</strong> 3 transcripts per day, first 30 minutes
         transcribed, originals kept 7 days. <strong>Unlimited:</strong> no
-        daily cap, up to 10 hours / 5 GB per file, 50 at a time, storage
+        daily cap, up to 3 hours / 5 GB per file, 20 per batch, storage
         forever. Peek at{" "}
         <Link href="/pricing" className="font-semibold text-coral hover:underline">
           pricing

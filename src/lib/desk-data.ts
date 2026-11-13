@@ -69,7 +69,20 @@ type TranscriptRow = {
     kind?: string | null;
     expires_at?: string | null;
   }> | null;
-  active_job?: { model?: string | null } | { model?: string | null }[] | null;
+  active_job?:
+    | {
+        model?: string | null;
+        requested_mode?: string | null;
+        stage?: string | null;
+        progress_pct?: number | null;
+      }
+    | {
+        model?: string | null;
+        requested_mode?: string | null;
+        stage?: string | null;
+        progress_pct?: number | null;
+      }[]
+    | null;
 };
 
 function mapTranscriptRow(row: TranscriptRow): DeskTranscript {
@@ -87,6 +100,10 @@ function mapTranscriptRow(row: TranscriptRow): DeskTranscript {
   return {
     ...rest,
     model: job?.model ?? null,
+    requested_mode: job?.requested_mode ?? null,
+    job_stage: job?.stage ?? null,
+    progress_pct:
+      typeof job?.progress_pct === "number" ? job.progress_pct : null,
     media_size_bytes: original?.size_bytes ?? null,
     media_expires_at: original?.expires_at ?? null,
   } as DeskTranscript;
@@ -100,7 +117,7 @@ async function loadTranscripts(
   const { data, error } = await admin
     .from("transcripts")
     .select(
-      "id, title, status, duration_seconds, requested_language, source_filename, folder_id, source_url, source_kind, created_at, updated_at, content_revision, active_job_id, share_enabled, media_assets(size_bytes, kind, expires_at), active_job:transcription_jobs!active_job_id(model)",
+      "id, title, status, duration_seconds, requested_language, source_filename, folder_id, source_url, source_kind, created_at, updated_at, content_revision, active_job_id, share_enabled, media_assets(size_bytes, kind, expires_at), active_job:transcription_jobs!active_job_id(model, requested_mode, stage, progress_pct)",
     )
     .eq("user_id", userId)
     .is("deleted_at", null)
@@ -129,24 +146,44 @@ async function loadTranscripts(
     .map((row) => row.active_job_id)
     .filter((id): id is string => Boolean(id));
 
-  let modelByJob = new Map<string, string | null>();
+  let jobById = new Map<
+    string,
+    {
+      model: string | null;
+      requested_mode: string | null;
+      stage: string | null;
+      progress_pct: number | null;
+    }
+  >();
   if (jobIds.length > 0) {
     const { data: jobs } = await admin
       .from("transcription_jobs")
-      .select("id, model")
+      .select("id, model, requested_mode, stage, progress_pct")
       .in("id", jobIds);
-    modelByJob = new Map(
+    jobById = new Map(
       (jobs ?? []).map((job) => [
         job.id as string,
-        (job.model as string | null) ?? null,
+        {
+          model: (job.model as string | null) ?? null,
+          requested_mode: (job.requested_mode as string | null) ?? null,
+          stage: (job.stage as string | null) ?? null,
+          progress_pct:
+            typeof job.progress_pct === "number" ? job.progress_pct : null,
+        },
       ]),
     );
   }
 
   return list.map((row) => {
     const mapped = mapTranscriptRow(row);
-    if (!mapped.model && row.active_job_id) {
-      mapped.model = modelByJob.get(row.active_job_id) ?? null;
+    if (row.active_job_id) {
+      const meta = jobById.get(row.active_job_id);
+      if (meta) {
+        mapped.model = mapped.model ?? meta.model;
+        mapped.requested_mode = mapped.requested_mode ?? meta.requested_mode;
+        mapped.job_stage = mapped.job_stage ?? meta.stage;
+        mapped.progress_pct = mapped.progress_pct ?? meta.progress_pct;
+      }
     }
     return mapped;
   });

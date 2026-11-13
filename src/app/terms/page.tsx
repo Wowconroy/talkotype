@@ -159,7 +159,7 @@ export default function TermsPage() {
           </li>
           <li>
             <strong>Unlimited:</strong> no daily transcript cap for one person;
-            uploads up to 10 hours or 5 GB per file; up to 50 concurrent
+            uploads up to 3 hours or 5 GB per file; up to 20 concurrent
             uploads; original media retained for the life of the subscription;
             higher priority; features such as speaker labels and PDF, DOCX, and
             SRT exports when those features are available; priced at USD 20 per

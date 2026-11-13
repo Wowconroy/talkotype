@@ -52,7 +52,7 @@ const slides = [
 const featureStrip = [
   { icon: Crosshair, label: "High accuracy", tone: "bg-coral text-white" },
   { icon: Globe2, label: "98+ languages", tone: "bg-sea text-ink" },
-  { icon: Rocket, label: "10 hour uploads", tone: "bg-lemon text-ink" },
+  { icon: Rocket, label: "3 hour uploads", tone: "bg-lemon text-ink" },
   { icon: InfinityIcon, label: "Unlimited minutes", tone: "bg-[#2db87c] text-white" },
   { icon: Users, label: "Speaker labels", tone: "bg-ink text-white" },
   { icon: Lock, label: "Private & secure", tone: "bg-[#f0b429] text-ink" },

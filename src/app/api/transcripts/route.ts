@@ -7,6 +7,7 @@ import {
   isR2Configured,
 } from "@/lib/r2";
 import { reconcileFreeQuotaForUser } from "@/lib/desk-data";
+import { isAcceptedMediaFile } from "@/lib/accepted-media";
 import {
   FREE_DAILY_TRANSCRIPTS,
   formatBytes,
@@ -15,19 +16,8 @@ import {
   mediaExpiresAt,
   normalizePlan,
 } from "@/lib/plan-limits";
+import { resolveModelForMode } from "@/lib/transcription-modes";
 import { randomUUID } from "crypto";
-
-const ALLOWED_MODELS = new Set([
-  "whisper-large-v3-turbo",
-  "whisper-large-v3",
-]);
-
-function resolveModel(input?: string | null) {
-  const fallback =
-    process.env.TRANSCRIPTION_MODEL ?? "whisper-large-v3-turbo";
-  if (!input) return fallback;
-  return ALLOWED_MODELS.has(input) ? input : fallback;
-}
 
 function quotaPayload(
   quota: {
@@ -62,6 +52,47 @@ async function releaseQuota(
   }
 }
 
+type JobInsert = {
+  transcript_id: string;
+  user_id: string;
+  provider: string;
+  model: string;
+  requested_mode: string;
+  filter_fillers: boolean;
+  prefer_timestamps: boolean;
+  transcribe_to_english: boolean;
+  status: string;
+  stage: string;
+  progress_pct: number;
+  speakers_requested: boolean;
+  attempt_count: number;
+  request_key: string;
+  source_content_revision: number;
+  error_message?: string;
+};
+
+async function insertTranscriptionJob(
+  admin: ReturnType<typeof createAdminClient>,
+  row: JobInsert,
+) {
+  const full = await admin
+    .from("transcription_jobs")
+    .insert(row)
+    .select("*")
+    .single();
+  if (!full.error) return full;
+
+  // Migration 20261113180000 may not be applied yet — retry without new cols.
+  const {
+    requested_mode: _m,
+    filter_fillers: _f,
+    prefer_timestamps: _p,
+    transcribe_to_english: _e,
+    ...legacy
+  } = row;
+  return admin.from("transcription_jobs").insert(legacy).select("*").single();
+}
+
 export async function GET() {
   const { user } = await requireUser();
   if (!user) {
@@ -89,15 +120,34 @@ export async function GET() {
     .filter((id): id is string => Boolean(id));
 
   let modelByJob = new Map<string, string | null>();
+  let jobMetaById = new Map<
+    string,
+    {
+      requested_mode: string | null;
+      stage: string | null;
+      progress_pct: number | null;
+    }
+  >();
   if (jobIds.length > 0) {
     const { data: jobs } = await admin
       .from("transcription_jobs")
-      .select("id, model")
+      .select("id, model, requested_mode, stage, progress_pct")
       .in("id", jobIds);
     modelByJob = new Map(
       (jobs ?? []).map((job) => [
         job.id as string,
         (job.model as string | null) ?? null,
+      ]),
+    );
+    jobMetaById = new Map(
+      (jobs ?? []).map((job) => [
+        job.id as string,
+        {
+          requested_mode: (job.requested_mode as string | null) ?? null,
+          stage: (job.stage as string | null) ?? null,
+          progress_pct:
+            typeof job.progress_pct === "number" ? job.progress_pct : null,
+        },
       ]),
     );
   }
@@ -108,12 +158,18 @@ export async function GET() {
       media.find((m: { kind?: string }) => m.kind === "original") ??
       media[0] ??
       null;
+    const meta = row.active_job_id
+      ? jobMetaById.get(row.active_job_id)
+      : undefined;
     const { media_assets: _omit, ...rest } = row;
     return {
       ...rest,
       model: row.active_job_id
         ? (modelByJob.get(row.active_job_id) ?? null)
         : null,
+      requested_mode: meta?.requested_mode ?? null,
+      job_stage: meta?.stage ?? null,
+      progress_pct: meta?.progress_pct ?? null,
       media_size_bytes: original?.size_bytes ?? null,
       media_expires_at: original?.expires_at ?? null,
     };
@@ -138,9 +194,11 @@ export async function POST(request: Request) {
     speakers?: boolean;
     folderId?: string | null;
     transcriptionModel?: string;
+    transcriptionMode?: string;
     sourceUrl?: string;
     filterFillers?: boolean;
     preferTimestamps?: boolean;
+    transcribeToEnglish?: boolean;
   };
 
   const sourceUrl = body.sourceUrl?.trim() || null;
@@ -174,17 +232,34 @@ export async function POST(request: Request) {
   }
 
   const filename = body.filename?.trim();
-  const contentType = body.contentType?.trim();
-  if (!isLinkImport && (!filename || !contentType)) {
+  const contentType = body.contentType?.trim() || "application/octet-stream";
+  if (!isLinkImport && !filename) {
     return NextResponse.json(
-      { error: "filename and contentType are required" },
+      { error: "filename is required" },
       { status: 400 },
     );
   }
 
+  if (!isLinkImport && filename) {
+    const accepted = isAcceptedMediaFile({
+      filename,
+      contentType,
+    });
+    if (!accepted.ok) {
+      return NextResponse.json({ error: accepted.error }, { status: 415 });
+    }
+  }
+
   const requestKey = body.requestKey?.trim() || randomUUID();
   const wantSpeakers = Boolean(body.speakers);
-  const model = resolveModel(body.transcriptionModel);
+  const { mode, model } = resolveModelForMode(
+    body.transcriptionMode,
+    body.transcriptionModel,
+  );
+  const filterFillers = Boolean(body.filterFillers);
+  const preferTimestamps =
+    body.preferTimestamps === undefined ? true : Boolean(body.preferTimestamps);
+  const transcribeToEnglish = Boolean(body.transcribeToEnglish);
   const admin = createAdminClient();
 
   const { data: profile } = await admin
@@ -332,24 +407,24 @@ export async function POST(request: Request) {
 
   // Link import: store URL as pending — no R2 / media / processing yet.
   if (isLinkImport) {
-    const { data: job, error: jobError } = await admin
-      .from("transcription_jobs")
-      .insert({
-        transcript_id: transcriptId,
-        user_id: user.id,
-        provider: process.env.TRANSCRIPTION_PROVIDER ?? "whisper",
-        model,
-        status: "queued",
-        stage: "awaiting_source",
-        progress_pct: 0,
-        speakers_requested: speakersRequested,
-        attempt_count: 0,
-        request_key: requestKey,
-        source_content_revision: transcript.content_revision ?? 0,
-        error_message: "Link import queued — media ingest coming soon.",
-      })
-      .select("*")
-      .single();
+    const { data: job, error: jobError } = await insertTranscriptionJob(admin, {
+      transcript_id: transcriptId,
+      user_id: user.id,
+      provider: process.env.TRANSCRIPTION_PROVIDER ?? "whisper",
+      model,
+      requested_mode: mode.id,
+      filter_fillers: filterFillers,
+      prefer_timestamps: preferTimestamps,
+      transcribe_to_english: transcribeToEnglish,
+      status: "queued",
+      stage: "awaiting_source",
+      progress_pct: 0,
+      speakers_requested: speakersRequested,
+      attempt_count: 0,
+      request_key: requestKey,
+      source_content_revision: transcript.content_revision ?? 0,
+      error_message: "Link import queued — media ingest coming soon.",
+    });
 
     if (jobError || !job) {
       await admin.from("transcripts").delete().eq("id", transcriptId);
@@ -406,23 +481,23 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: job, error: jobError } = await admin
-    .from("transcription_jobs")
-    .insert({
-      transcript_id: transcriptId,
-      user_id: user.id,
-      provider: process.env.TRANSCRIPTION_PROVIDER ?? "whisper",
-      model,
-      status: "queued",
-      stage: "queued",
-      progress_pct: 0,
-      speakers_requested: speakersRequested,
-      attempt_count: 0,
-      request_key: requestKey,
-      source_content_revision: transcript.content_revision ?? 0,
-    })
-    .select("*")
-    .single();
+  const { data: job, error: jobError } = await insertTranscriptionJob(admin, {
+    transcript_id: transcriptId,
+    user_id: user.id,
+    provider: process.env.TRANSCRIPTION_PROVIDER ?? "whisper",
+    model,
+    requested_mode: mode.id,
+    filter_fillers: filterFillers,
+    prefer_timestamps: preferTimestamps,
+    transcribe_to_english: transcribeToEnglish,
+    status: "queued",
+    stage: "queued",
+    progress_pct: 0,
+    speakers_requested: speakersRequested,
+    attempt_count: 0,
+    request_key: requestKey,
+    source_content_revision: transcript.content_revision ?? 0,
+  });
 
   if (jobError || !job) {
     await admin.from("media_assets").delete().eq("id", media.id);

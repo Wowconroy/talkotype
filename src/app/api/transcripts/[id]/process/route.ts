@@ -7,7 +7,10 @@ import {
   normalizePlan,
 } from "@/lib/plan-limits";
 import { getObjectBytes, isR2Configured } from "@/lib/r2";
-import { isGroqConfigured, transcribeWithGroq } from "@/lib/groq-whisper";
+import {
+  isTranscriptionConfigured,
+  transcribeAudio,
+} from "@/lib/transcription-provider";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -79,7 +82,7 @@ export async function POST(_request: Request, { params }: Params) {
     );
   }
 
-  if (!useAssembly && !isGroqConfigured()) {
+  if (!useAssembly && !isTranscriptionConfigured()) {
     await admin.rpc("publish_job_transcript", {
       p_job_id: transcript.active_job_id,
       p_transcript_text: "",
@@ -96,8 +99,8 @@ export async function POST(_request: Request, { params }: Params) {
     .from("transcription_jobs")
     .update({
       status: "processing",
-      stage: "transcribing",
-      progress_pct: 15,
+      stage: "preparing_audio",
+      progress_pct: 10,
       attempt_count: (job?.attempt_count ?? 0) + 1,
       started_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -128,7 +131,7 @@ export async function POST(_request: Request, { params }: Params) {
     await admin
       .from("transcription_jobs")
       .update({
-        progress_pct: 40,
+        progress_pct: 35,
         stage: "transcribing",
         updated_at: new Date().toISOString(),
       })
@@ -139,13 +142,20 @@ export async function POST(_request: Request, { params }: Params) {
       media.object_key.split("/").pop() ||
       "audio.mp3";
 
-    const rawResult = await transcribeWithGroq({
+    const normalised = await transcribeAudio({
       bytes,
       filename,
       contentType: media.content_type || contentType,
       model: job?.model,
       language: transcript.requested_language,
     });
+
+    const rawResult = {
+      text: normalised.text,
+      language: normalised.detectedLanguage,
+      duration: normalised.usage.durationSeconds,
+      segments: normalised.segments,
+    };
 
     const { data: ownerProfile } = await admin
       .from("profiles")
@@ -203,11 +213,21 @@ export async function POST(_request: Request, { params }: Params) {
       throw new Error(publishError.message);
     }
 
+    await admin
+      .from("transcription_jobs")
+      .update({
+        progress_pct: 100,
+        stage: "ready",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", transcript.active_job_id);
+
     return NextResponse.json({
       ok: true,
       status: "ready",
-      provider: "whisper",
-      model: job?.model ?? "whisper-large-v3-turbo",
+      provider: normalised.provider,
+      model: normalised.model,
+      requestedMode: job?.requested_mode ?? null,
       transcript: published,
       chars: result.text.length,
       segments: result.segments?.length ?? 0,

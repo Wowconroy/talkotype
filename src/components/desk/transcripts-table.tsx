@@ -131,7 +131,7 @@ export function TranscriptsTable({
                   {formatDuration(row.duration_seconds)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3.5 text-muted-foreground">
-                  {modeLabel(row.model)}
+                  {modeLabel(row.model, row.requested_mode)}
                 </td>
                 <td className="px-4 py-3.5">
                   <StatusPill row={row} />
