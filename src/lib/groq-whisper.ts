@@ -3,6 +3,11 @@
  * https://console.groq.com/docs/speech-to-text
  */
 
+import {
+  refineSegmentsWithWords,
+  type WordStamp,
+} from "@/lib/transcript-display";
+
 const GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
 
 export type GroqTranscriptResult = {
@@ -14,6 +19,7 @@ export type GroqTranscriptResult = {
     end: number;
     text: string;
   }>;
+  words?: WordStamp[];
 };
 
 export function isGroqConfigured() {
@@ -46,7 +52,9 @@ export async function transcribeWithGroq(params: {
   form.append("model", model);
   form.append("response_format", "verbose_json");
   form.append("temperature", String(params.temperature ?? 0));
+  // Segment + word stamps: word starts correct early segment boundaries.
   form.append("timestamp_granularities[]", "segment");
+  form.append("timestamp_granularities[]", "word");
   if (params.language) {
     // Whisper expects ISO-639-1; map en-GB / en-US → en
     const lang = params.language.toLowerCase().startsWith("en")
@@ -82,6 +90,7 @@ export async function transcribeWithGroq(params: {
     language?: string;
     duration?: number;
     segments?: Array<{ start?: number; end?: number; text?: string }>;
+    words?: Array<{ word?: string; start?: number; end?: number }>;
     error?: { message?: string } | string;
   };
 
@@ -93,6 +102,22 @@ export async function transcribeWithGroq(params: {
     throw new Error(message);
   }
 
+  const words: WordStamp[] = (payload.words || [])
+    .map((w) => ({
+      word: (w.word || "").trim(),
+      start: Number(w.start ?? 0),
+      end: Number(w.end ?? 0),
+    }))
+    .filter((w) => w.word);
+
+  const rawSegments = (payload.segments || [])
+    .map((s) => ({
+      start: Number(s.start ?? 0),
+      end: Number(s.end ?? 0),
+      text: (s.text || "").trim(),
+    }))
+    .filter((s) => s.text);
+
   return {
     text: (payload.text || "").trim(),
     language: payload.language ?? null,
@@ -100,12 +125,7 @@ export async function transcribeWithGroq(params: {
       typeof payload.duration === "number"
         ? Math.round(payload.duration)
         : null,
-    segments: (payload.segments || [])
-      .map((s) => ({
-        start: Number(s.start ?? 0),
-        end: Number(s.end ?? 0),
-        text: (s.text || "").trim(),
-      }))
-      .filter((s) => s.text),
+    segments: refineSegmentsWithWords(rawSegments, words),
+    words,
   };
 }

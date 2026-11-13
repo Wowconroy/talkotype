@@ -15,18 +15,35 @@ export async function GET(request: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  const kind =
+  const kindParam =
     new URL(request.url).searchParams.get("kind") ?? "original";
+  // playback: prefer extracted mono audio, fall back to original (mp4/mp3).
+  const kinds =
+    kindParam === "playback"
+      ? ["extracted_audio", "original"]
+      : [kindParam];
 
   const admin = createAdminClient();
-  const { data: media } = await admin
-    .from("media_assets")
-    .select("*")
-    .eq("transcript_id", id)
-    .eq("user_id", user.id)
-    .eq("kind", kind)
-    .is("deleted_at", null)
-    .maybeSingle();
+  let media: {
+    object_key: string;
+    expires_at: string | null;
+    kind: string;
+  } | null = null;
+
+  for (const kind of kinds) {
+    const { data } = await admin
+      .from("media_assets")
+      .select("object_key, expires_at, kind")
+      .eq("transcript_id", id)
+      .eq("user_id", user.id)
+      .eq("kind", kind)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (data) {
+      media = data;
+      break;
+    }
+  }
 
   if (!media) {
     return NextResponse.json({ error: "Media not found" }, { status: 404 });
@@ -40,5 +57,9 @@ export async function GET(request: Request, { params }: Params) {
   }
 
   const url = await createDownloadUrl({ objectKey: media.object_key });
-  return NextResponse.json({ url, expiresAt: media.expires_at });
+  return NextResponse.json({
+    url,
+    kind: media.kind,
+    expiresAt: media.expires_at,
+  });
 }

@@ -35,6 +35,7 @@ export async function transcribeFile(params: {
   form.append("response_format", "verbose_json");
   form.append("temperature", "0");
   form.append("timestamp_granularities[]", "segment");
+  form.append("timestamp_granularities[]", "word");
   if (params.language) {
     // Whisper expects ISO-639-1; map en-GB / en-US → en
     const lang = params.language.toLowerCase().startsWith("en")
@@ -56,6 +57,7 @@ export async function transcribeFile(params: {
     language?: string;
     duration?: number;
     segments?: Array<{ start?: number; end?: number; text?: string }>;
+    words?: Array<{ word?: string; start?: number; end?: number }>;
     error?: { message?: string } | string;
   };
 
@@ -74,6 +76,35 @@ export async function transcribeFile(params: {
     throw err;
   }
 
+  const words = (payload.words || [])
+    .map((w) => ({
+      word: (w.word || "").trim(),
+      start: Number(w.start ?? 0),
+      end: Number(w.end ?? 0),
+    }))
+    .filter((w) => w.word);
+
+  const rawSegments = (payload.segments || [])
+    .map((s) => ({
+      start: Number(s.start ?? 0),
+      end: Number(s.end ?? 0),
+      text: (s.text || "").trim(),
+    }))
+    .filter((s) => s.text);
+
+  // Prefer first-word start inside each segment (Whisper segments run early).
+  const segments = rawSegments.map((seg) => {
+    const inRange = words.filter(
+      (w) => w.start >= seg.start - 0.35 && w.start <= seg.end + 0.15,
+    );
+    if (inRange.length === 0) return seg;
+    return {
+      ...seg,
+      start: inRange[0].start,
+      end: Math.max(seg.end, inRange[inRange.length - 1].end),
+    };
+  });
+
   return {
     text: (payload.text || "").trim(),
     language: payload.language ?? null,
@@ -81,12 +112,6 @@ export async function transcribeFile(params: {
       typeof payload.duration === "number"
         ? Math.round(payload.duration)
         : null,
-    segments: (payload.segments || [])
-      .map((s) => ({
-        start: Number(s.start ?? 0),
-        end: Number(s.end ?? 0),
-        text: (s.text || "").trim(),
-      }))
-      .filter((s) => s.text),
+    segments,
   };
 }

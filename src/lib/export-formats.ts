@@ -105,11 +105,27 @@ export function buildTxt(input: ExportInput) {
   if (!input.includeTimestamps && !hasSpeakers) {
     return input.text || segs.map((s) => s.text).join("\n\n");
   }
-  return segs
-    .map((s) =>
-      formatSegmentLine(s, { stamp: Boolean(input.includeTimestamps) }),
-    )
-    .join("\n\n");
+  // Compact inline timestamps (competitor-style), paragraph-wrapped.
+  const lines: string[] = [];
+  let buf: string[] = [];
+  let chars = 0;
+  const flush = () => {
+    if (buf.length === 0) return;
+    lines.push(buf.join(" "));
+    buf = [];
+    chars = 0;
+  };
+  for (const s of segs) {
+    const piece = formatSegmentLine(s, {
+      stamp: Boolean(input.includeTimestamps),
+    });
+    if (chars + piece.length > 420 && buf.length > 0) flush();
+    buf.push(piece);
+    chars += piece.length + 1;
+    if (buf.length >= 5) flush();
+  }
+  flush();
+  return lines.join("\n\n");
 }
 
 export function buildCsv(input: ExportInput) {

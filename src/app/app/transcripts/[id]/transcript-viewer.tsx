@@ -7,6 +7,7 @@ import {
   FolderModal,
   type FolderModalMode,
 } from "@/components/desk/folder-modal";
+import { TranscriptAudioPlayer } from "@/components/desk/transcript-audio-player";
 import {
   TranscriptActionModals,
   type TranscriptDialog,
@@ -19,6 +20,12 @@ import {
   type DeskTranscript,
   type DeskUsage,
 } from "@/components/desk/types";
+import {
+  clockFromMs,
+  groupSegmentsIntoParagraphs,
+  isJunkDisplayText,
+  type DisplaySegment,
+} from "@/lib/transcript-display";
 
 type Segment = {
   segment_index: number;
@@ -40,13 +47,6 @@ type TranscriptDetail = DeskTranscript & {
   speakers?: Speaker[];
   media_assets?: { size_bytes?: number | null; kind?: string }[];
 };
-
-function clock(ms: number) {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
 
 export function TranscriptViewer({ id }: { id: string }) {
   const router = useRouter();
@@ -72,6 +72,12 @@ export function TranscriptViewer({ id }: { id: string }) {
   } | null>(null);
   const [folderBusy, setFolderBusy] = useState(false);
   const [folderError, setFolderError] = useState<string | null>(null);
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const [playerSrc, setPlayerSrc] = useState<string | null>(null);
+  const [seekMs, setSeekMs] = useState<number | null>(null);
+  const [seekToken, setSeekToken] = useState(0);
+  const [activeSeg, setActiveSeg] = useState<number | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
 
   const loadMeta = useCallback(async () => {
     const res = await fetch("/api/desk", { credentials: "same-origin" });
@@ -143,35 +149,70 @@ export function TranscriptViewer({ id }: { id: string }) {
     return map;
   }, [row?.speakers]);
 
-  const renderedBody = useMemo(() => {
+  const displaySegments = useMemo((): DisplaySegment[] => {
     const segments = row?.segments ?? [];
-    if (segments.length > 0) {
-      return segments
-        .filter((seg) => {
-          const t = (seg.text || "").trim();
-          if (!t) return false;
-          if (/^дякую за перегляд!?$/i.test(t)) return false;
-          if (/^thanks for watching!?$/i.test(t)) return false;
-          if (/^(музика|звучить музика)$/i.test(t)) return false;
-          if (/^(?:[oо]\.?|[.,;:!?…]+)$/iu.test(t)) return false;
-          return true;
-        })
-        .map((seg) => {
-          const stamp =
-            showTimestamps && seg.start_ms != null
-              ? `(${clock(seg.start_ms)}) `
-              : "";
-          const speaker =
-            seg.speaker_id && speakerLabelById.get(seg.speaker_id)
-              ? `${speakerLabelById.get(seg.speaker_id)}: `
-              : "";
-          return `${stamp}${speaker}${seg.text}`.trim();
-        });
+    if (segments.length === 0) return [];
+    return segments
+      .filter((seg) => !isJunkDisplayText(seg.text || ""))
+      .map((seg) => ({
+        segment_index: seg.segment_index,
+        start_ms: seg.start_ms,
+        end_ms: seg.end_ms,
+        text: (seg.text || "").trim(),
+        speaker_id: seg.speaker_id,
+        speaker_label: seg.speaker_id
+          ? (speakerLabelById.get(seg.speaker_id) ?? null)
+          : null,
+      }));
+  }, [row?.segments, speakerLabelById]);
+
+  const paragraphs = useMemo(
+    () => groupSegmentsIntoParagraphs(displaySegments),
+    [displaySegments],
+  );
+
+  const plainParagraphs = useMemo(() => {
+    if (displaySegments.length > 0) return [] as string[];
+    return text
+      .trim()
+      .split(/\n+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+  }, [displaySegments.length, text]);
+
+  const ensureMediaUrl = useCallback(async () => {
+    if (playerSrc) return playerSrc;
+    setMediaLoading(true);
+    try {
+      const res = await fetch(
+        `/api/transcripts/${id}/media-url?kind=playback`,
+        { credentials: "same-origin" },
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Audio not available");
+      }
+      const url = data.url as string;
+      setPlayerSrc(url);
+      return url;
+    } finally {
+      setMediaLoading(false);
     }
-    const plain = text.trim();
-    if (!plain) return [] as string[];
-    return plain.split(/\n+/).filter(Boolean);
-  }, [row?.segments, showTimestamps, speakerLabelById, text]);
+  }, [id, playerSrc]);
+
+  async function playFromSegment(seg: DisplaySegment) {
+    if (seg.start_ms == null) return;
+    setError(null);
+    setActiveSeg(seg.segment_index);
+    setPlayerOpen(true);
+    try {
+      await ensureMediaUrl();
+      setSeekMs(seg.start_ms);
+      setSeekToken((n) => n + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open audio");
+    }
+  }
 
   async function saveEdits() {
     if (!row) return;
@@ -342,7 +383,10 @@ export function TranscriptViewer({ id }: { id: string }) {
                 className="w-full border-0 bg-transparent font-display text-3xl font-semibold tracking-tight text-ink outline-none"
               />
             ) : (
-              <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
+              <h1
+                className="truncate font-display text-3xl font-semibold tracking-tight text-ink"
+                title={title || "Untitled"}
+              >
                 {title || "Untitled"}
               </h1>
             )}
@@ -351,7 +395,11 @@ export function TranscriptViewer({ id }: { id: string }) {
               {row.duration_seconds != null
                 ? ` · ${formatDuration(row.duration_seconds)}`
                 : ""}
-              {row.status ? ` · ${row.status}` : ""}
+              {row.status === "ready"
+                ? " · Completed"
+                : row.status
+                  ? ` · ${row.status}`
+                  : ""}
             </p>
 
             {editing ? (
@@ -362,16 +410,71 @@ export function TranscriptViewer({ id }: { id: string }) {
                 className="mt-6 w-full resize-y rounded-2xl border border-border bg-mist/40 px-4 py-4 text-sm leading-relaxed text-ink outline-none focus:border-sea focus:ring-2 focus:ring-sea/30"
               />
             ) : (
-              <div className="mt-6 space-y-4 text-sm leading-relaxed text-ink sm:text-base">
-                {renderedBody.length === 0 ? (
+              <div
+                className={`mt-6 text-sm leading-[1.75] text-ink sm:text-[15px] ${
+                  playerOpen ? "pb-24" : ""
+                }`}
+              >
+                {paragraphs.length === 0 && plainParagraphs.length === 0 ? (
                   <p className="text-muted-foreground">
                     This transcript does not have text yet.
                   </p>
+                ) : paragraphs.length > 0 ? (
+                  <div className="space-y-5">
+                    {paragraphs.map((para, pi) => (
+                      <p key={`p-${pi}`} className="text-pretty">
+                        {para.map((seg, si) => {
+                          const active = activeSeg === seg.segment_index;
+                          return (
+                            <span key={`${seg.segment_index}-${si}`}>
+                              {showTimestamps && seg.start_ms != null ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void playFromSegment(seg)}
+                                  className="mr-1 inline align-baseline font-mono text-[0.78em] text-muted-foreground transition hover:text-sea"
+                                  title="Play from here"
+                                >
+                                  ({clockFromMs(seg.start_ms)})
+                                </button>
+                              ) : null}
+                              {si === 0 && seg.speaker_label ? (
+                                <span className="mr-1 font-semibold text-sea">
+                                  {seg.speaker_label}:
+                                </span>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => void playFromSegment(seg)}
+                                disabled={mediaLoading}
+                                className={`inline rounded-sm px-0.5 text-left transition hover:bg-sea/10 ${
+                                  active ? "bg-coral/20" : ""
+                                }`}
+                                title={
+                                  seg.start_ms != null
+                                    ? `Play at ${clockFromMs(seg.start_ms)}`
+                                    : "Play"
+                                }
+                              >
+                                {seg.text}
+                              </button>{" "}
+                            </span>
+                          );
+                        })}
+                      </p>
+                    ))}
+                  </div>
                 ) : (
-                  renderedBody.map((line, i) => (
-                    <p key={`${i}-${line.slice(0, 12)}`}>{line}</p>
-                  ))
+                  <div className="space-y-4">
+                    {plainParagraphs.map((line, i) => (
+                      <p key={`${i}-${line.slice(0, 12)}`}>{line}</p>
+                    ))}
+                  </div>
                 )}
+                {displaySegments.length > 0 ? (
+                  <p className="mt-4 text-xs text-muted-foreground">
+                    Click a sentence or timestamp to play audio from that moment.
+                  </p>
+                ) : null}
               </div>
             )}
 
@@ -510,6 +613,18 @@ export function TranscriptViewer({ id }: { id: string }) {
           </div>
         </div>
       ) : null}
+
+      <TranscriptAudioPlayer
+        open={playerOpen}
+        title={title || row.source_filename || "Audio"}
+        src={playerSrc}
+        seekMs={seekMs}
+        seekToken={seekToken}
+        onClose={() => {
+          setPlayerOpen(false);
+          setActiveSeg(null);
+        }}
+      />
     </div>
   );
 }
