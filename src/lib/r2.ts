@@ -142,6 +142,22 @@ export async function deleteTranscriptStorage(params: {
   return { deleted };
 }
 
+export async function putObjectBytes(params: {
+  objectKey: string;
+  bytes: Uint8Array | Buffer;
+  contentType: string;
+}) {
+  const client = getR2Client();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: requireEnv("R2_BUCKET_NAME"),
+      Key: params.objectKey,
+      Body: params.bytes,
+      ContentType: params.contentType,
+    }),
+  );
+}
+
 export async function getObjectBytes(objectKey: string): Promise<{
   bytes: Uint8Array;
   contentType: string | null;

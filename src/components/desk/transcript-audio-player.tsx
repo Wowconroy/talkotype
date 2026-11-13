@@ -7,25 +7,40 @@ import { clockFromMs } from "@/lib/transcript-display";
 type Props = {
   title: string;
   src: string | null;
+  contentType?: string | null;
   seekMs: number | null;
   /** Bumps when the same timestamp is clicked again. */
   seekToken?: number;
   durationSeconds?: number | null;
+  preparing?: boolean;
   open: boolean;
   onClose: () => void;
 };
 
+function isAudioContentType(contentType: string | null | undefined) {
+  if (!contentType) return false;
+  return (
+    contentType.startsWith("audio/") ||
+    contentType.includes("mpeg") ||
+    contentType.includes("mp4a") ||
+    contentType.includes("flac") ||
+    contentType.includes("wav") ||
+    contentType.includes("ogg")
+  );
+}
+
 export function TranscriptAudioPlayer({
   title,
   src,
+  contentType = null,
   seekMs,
   seekToken = 0,
   durationSeconds = null,
+  preparing = false,
   open,
   onClose,
 }: Props) {
   const mediaRef = useRef<HTMLAudioElement | HTMLVideoElement | null>(null);
-  /** Seconds to seek to; cleared after a successful seeked event. */
   const pendingSeekSecRef = useRef<number | null>(null);
   const seekGenRef = useRef(0);
   const [playing, setPlaying] = useState(false);
@@ -33,6 +48,11 @@ export function TranscriptAudioPlayer({
   const [durationMs, setDurationMs] = useState(0);
   const [volume, setVolume] = useState(1);
   const [error, setError] = useState<string | null>(null);
+
+  // Prefer <audio> for extracted MP3/M4A — frame-accurate seeks vs MP4 keyframes.
+  const useAudioTag =
+    isAudioContentType(contentType) ||
+    (typeof src === "string" && /\.(mp3|m4a|flac|wav|ogg)(\?|$)/i.test(src));
 
   const metaDurationMs =
     durationSeconds != null && Number.isFinite(durationSeconds)
@@ -59,13 +79,20 @@ export function TranscriptAudioPlayer({
     if (media.readyState < 1) return;
     try {
       syncDuration(media);
-      // Clamp into known duration when available.
       const max =
         Number.isFinite(media.duration) && media.duration > 0
-          ? media.duration - 0.05
+          ? Math.max(0, media.duration - 0.05)
           : target;
       const next = Math.max(0, Math.min(target, max));
-      media.currentTime = next;
+      if (typeof media.fastSeek === "function") {
+        try {
+          media.fastSeek(next);
+        } catch {
+          media.currentTime = next;
+        }
+      } else {
+        media.currentTime = next;
+      }
       setCurrentMs(Math.round(next * 1000));
       void media
         .play()
@@ -84,7 +111,6 @@ export function TranscriptAudioPlayer({
     }
   }
 
-  // New click → optimistic UI + queue a seek (latest token wins).
   useEffect(() => {
     if (!open || seekMs == null) return;
     const sec = Math.max(0, seekMs / 1000);
@@ -105,7 +131,6 @@ export function TranscriptAudioPlayer({
     setError(null);
   }, [open]);
 
-  // Wire media events once per open session.
   useEffect(() => {
     const media = mediaRef.current;
     if (!media || !open) return;
@@ -114,26 +139,16 @@ export function TranscriptAudioPlayer({
     const onDuration = () => syncDuration(media);
     const onTime = () => {
       const pending = pendingSeekSecRef.current;
-      // Ignore stale 0:00 updates while a seek is still outstanding.
       if (pending != null && media.currentTime < 0.35 && pending > 1) return;
       setCurrentMs(Math.round(media.currentTime * 1000));
     };
     const onSeeked = () => {
       const target = pendingSeekSecRef.current;
       const actual = media.currentTime;
-      if (target != null) {
-        if (Math.abs(actual - target) <= 1.25) {
-          pendingSeekSecRef.current = null;
-        } else {
-          // Some MP4s snap to a distant keyframe — nudge again once.
-          try {
-            media.currentTime = target;
-          } catch {
-            /* ignore */
-          }
-        }
+      if (target != null && Math.abs(actual - target) <= 0.75) {
+        pendingSeekSecRef.current = null;
       }
-      setCurrentMs(Math.round(media.currentTime * 1000));
+      setCurrentMs(Math.round(actual * 1000));
     };
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
@@ -160,9 +175,8 @@ export function TranscriptAudioPlayer({
       media.removeEventListener("pause", onPause);
       media.removeEventListener("error", onError);
     };
-  }, [open]);
+  }, [open, useAudioTag]);
 
-  // Load source when it arrives / changes.
   useEffect(() => {
     const media = mediaRef.current;
     if (!media || !open || !src) return;
@@ -181,7 +195,7 @@ export function TranscriptAudioPlayer({
       return;
     }
     tryApplyPendingSeek(media, seekGenRef.current);
-  }, [src, open, seekToken]);
+  }, [src, open, seekToken, useAudioTag]);
 
   if (!open) return null;
 
@@ -218,18 +232,25 @@ export function TranscriptAudioPlayer({
     }
   }
 
+  const mediaClassName =
+    "pointer-events-none absolute h-0 w-0 opacity-0";
+
   return (
     <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-border/80 bg-white/95 px-4 py-3 shadow-[0_-12px_40px_rgba(18,61,58,0.12)] backdrop-blur">
-      {/*
-        Hidden video element: seeking in MP4 is more reliable than <audio>
-        when playback falls back to the original video file.
-      */}
-      <video
-        ref={mediaRef as React.MutableRefObject<HTMLVideoElement | null>}
-        preload="auto"
-        playsInline
-        className="pointer-events-none absolute h-0 w-0 opacity-0"
-      />
+      {useAudioTag ? (
+        <audio
+          ref={mediaRef as React.MutableRefObject<HTMLAudioElement | null>}
+          preload="auto"
+          className={mediaClassName}
+        />
+      ) : (
+        <video
+          ref={mediaRef as React.MutableRefObject<HTMLVideoElement | null>}
+          preload="auto"
+          playsInline
+          className={mediaClassName}
+        />
+      )}
       <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
@@ -271,9 +292,11 @@ export function TranscriptAudioPlayer({
             </div>
             {error ? (
               <p className="mt-1 text-xs text-coral">{error}</p>
-            ) : !src ? (
+            ) : preparing || !src ? (
               <p className="mt-1 text-xs text-muted-foreground">
-                Loading audio…
+                {preparing
+                  ? "Preparing precise audio for seeking… (first click can take a minute on long videos)"
+                  : "Loading audio…"}
               </p>
             ) : null}
           </div>

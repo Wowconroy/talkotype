@@ -75,10 +75,14 @@ export function TranscriptViewer({ id }: { id: string }) {
   const [folderError, setFolderError] = useState<string | null>(null);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [playerSrc, setPlayerSrc] = useState<string | null>(null);
+  const [playerContentType, setPlayerContentType] = useState<string | null>(
+    null,
+  );
   const [seekMs, setSeekMs] = useState<number | null>(null);
   const [seekToken, setSeekToken] = useState(0);
   const [activeSeg, setActiveSeg] = useState<number | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaPreparing, setMediaPreparing] = useState(false);
   const playerSrcRef = useRef<string | null>(null);
   const mediaUrlPromiseRef = useRef<Promise<string> | null>(null);
   const playRequestRef = useRef(0);
@@ -188,6 +192,7 @@ export function TranscriptViewer({ id }: { id: string }) {
     if (mediaUrlPromiseRef.current) return mediaUrlPromiseRef.current;
 
     setMediaLoading(true);
+    setMediaPreparing(true);
     const promise = (async () => {
       const res = await fetch(
         `/api/transcripts/${id}/media-url?kind=playback`,
@@ -200,6 +205,9 @@ export function TranscriptViewer({ id }: { id: string }) {
       const url = data.url as string;
       playerSrcRef.current = url;
       setPlayerSrc(url);
+      setPlayerContentType(
+        typeof data.contentType === "string" ? data.contentType : null,
+      );
       return url;
     })();
 
@@ -211,6 +219,7 @@ export function TranscriptViewer({ id }: { id: string }) {
       throw err;
     } finally {
       setMediaLoading(false);
+      setMediaPreparing(false);
     }
   }, [id]);
 
@@ -489,9 +498,11 @@ export function TranscriptViewer({ id }: { id: string }) {
                 {displaySegments.length > 0 ? (
                   <p className="mt-4 text-xs text-muted-foreground">
                     Click a sentence or timestamp to play audio from that moment.
-                    {usingSyntheticSegments
-                      ? " Timestamps are approximate for this file — re-run transcription for exact sync."
-                      : ""}
+                    {mediaPreparing
+                      ? " First play may prepare a seekable audio track — wait for it to finish."
+                      : usingSyntheticSegments
+                        ? " Timestamps are approximate for this file — re-run transcription for exact sync."
+                        : ""}
                   </p>
                 ) : null}
               </div>
@@ -637,9 +648,11 @@ export function TranscriptViewer({ id }: { id: string }) {
         open={playerOpen}
         title={title || row.source_filename || "Audio"}
         src={playerSrc}
+        contentType={playerContentType}
         seekMs={seekMs}
         seekToken={seekToken}
         durationSeconds={row.duration_seconds}
+        preparing={mediaPreparing}
         onClose={() => {
           setPlayerOpen(false);
           setActiveSeg(null);

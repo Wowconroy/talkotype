@@ -12,7 +12,12 @@ import {
   FREE_TRANSCRIBE_SECONDS,
   normalizePlan,
 } from "@/lib/plan-limits";
-import { getObjectBytes, isR2Configured } from "@/lib/r2";
+import {
+  buildObjectKey,
+  getObjectBytes,
+  isR2Configured,
+  putObjectBytes,
+} from "@/lib/r2";
 import { qualityForMode } from "@/lib/transcription-modes";
 import { isAssemblyAIConfigured } from "@/lib/assemblyai";
 import {
@@ -55,6 +60,7 @@ export async function POST(_request: Request, { params }: Params) {
       object_key: string;
       content_type?: string | null;
       size_bytes?: number | null;
+      expires_at?: string | null;
       deleted_at: string | null;
     }>
   )?.find((item) => item.kind === "original" && !item.deleted_at);
@@ -232,6 +238,39 @@ export async function POST(_request: Request, { params }: Params) {
       audioBytes = extracted.bytes;
       audioFilename = extracted.filename;
       audioType = extracted.contentType;
+
+      // Persist mono MP3 so click-to-play can seek precisely (MP4 keyframes drift).
+      try {
+        const extractedKey = buildObjectKey({
+          userId: user.id,
+          transcriptId: id,
+          kind: "extracted_audio",
+          filename: extracted.filename,
+        });
+        await putObjectBytes({
+          objectKey: extractedKey,
+          bytes: extracted.bytes,
+          contentType: extracted.contentType,
+        });
+        await admin
+          .from("media_assets")
+          .delete()
+          .eq("transcript_id", id)
+          .eq("kind", "extracted_audio");
+        await admin.from("media_assets").insert({
+          transcript_id: id,
+          user_id: user.id,
+          kind: "extracted_audio",
+          object_key: extractedKey,
+          content_type: extracted.contentType,
+          size_bytes: extracted.bytes.byteLength,
+          expires_at: media.expires_at ?? null,
+          status: "active",
+        });
+      } catch {
+        // Transcription can continue even if playback cache upload fails.
+      }
+
       await reportProgress(34, "preparing_audio");
     }
 

@@ -1,9 +1,30 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createDownloadUrl, isR2Configured } from "@/lib/r2";
+import {
+  extractAudioFile,
+  isFfmpegAvailable,
+  looksLikeVideo,
+} from "@/lib/ffmpeg-local";
+import {
+  buildObjectKey,
+  createDownloadUrl,
+  getObjectBytes,
+  isR2Configured,
+  putObjectBytes,
+} from "@/lib/r2";
 
 type Params = { params: Promise<{ id: string }> };
+
+export const maxDuration = 300;
+
+type MediaRow = {
+  object_key: string;
+  expires_at: string | null;
+  kind: string;
+  content_type?: string | null;
+  size_bytes?: number | null;
+};
 
 export async function GET(request: Request, { params }: Params) {
   const { user } = await requireUser();
@@ -17,49 +38,126 @@ export async function GET(request: Request, { params }: Params) {
   const { id } = await params;
   const kindParam =
     new URL(request.url).searchParams.get("kind") ?? "original";
-  // playback: prefer extracted mono audio, fall back to original (mp4/mp3).
-  const kinds =
-    kindParam === "playback"
-      ? ["extracted_audio", "original"]
-      : [kindParam];
-
   const admin = createAdminClient();
-  let media: {
-    object_key: string;
-    expires_at: string | null;
-    kind: string;
-  } | null = null;
 
-  for (const kind of kinds) {
+  const loadKind = async (kind: string) => {
     const { data } = await admin
       .from("media_assets")
-      .select("object_key, expires_at, kind")
+      .select("object_key, expires_at, kind, content_type, size_bytes")
       .eq("transcript_id", id)
       .eq("user_id", user.id)
       .eq("kind", kind)
       .is("deleted_at", null)
       .maybeSingle();
-    if (data) {
-      media = data;
-      break;
+    return (data as MediaRow | null) ?? null;
+  };
+
+  const assertFresh = (row: MediaRow) => {
+    if (row.expires_at && new Date(row.expires_at) < new Date()) {
+      return NextResponse.json(
+        { error: "Original media has expired" },
+        { status: 410 },
+      );
     }
+    return null;
+  };
+
+  async function signed(row: MediaRow, extra?: Record<string, unknown>) {
+    const expired = assertFresh(row);
+    if (expired) return expired;
+    const url = await createDownloadUrl({ objectKey: row.object_key });
+    return NextResponse.json({
+      url,
+      kind: row.kind,
+      contentType: row.content_type ?? null,
+      expiresAt: row.expires_at,
+      ...extra,
+    });
   }
 
+  if (kindParam === "playback") {
+    const extracted = await loadKind("extracted_audio");
+    if (extracted) return signed(extracted);
+
+    const original = await loadKind("original");
+    if (!original) {
+      return NextResponse.json({ error: "Media not found" }, { status: 404 });
+    }
+    const expired = assertFresh(original);
+    if (expired) return expired;
+
+    const { data: transcript } = await admin
+      .from("transcripts")
+      .select("source_filename")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const filename =
+      (transcript?.source_filename as string | undefined) ||
+      original.object_key.split("/").pop() ||
+      "audio.bin";
+    const videoLike = looksLikeVideo({
+      filename,
+      contentType: original.content_type,
+    });
+
+    // MP4/MOV keyframe seeking is inaccurate — build mono MP3 once for playback.
+    if (videoLike && (await isFfmpegAvailable())) {
+      try {
+        const { bytes } = await getObjectBytes(original.object_key);
+        const extractedFile = await extractAudioFile({
+          sourceBytes: bytes,
+          sourceFilename: filename,
+        });
+        if (extractedFile) {
+          const extractedKey = buildObjectKey({
+            userId: user.id,
+            transcriptId: id,
+            kind: "extracted_audio",
+            filename: extractedFile.filename,
+          });
+          await putObjectBytes({
+            objectKey: extractedKey,
+            bytes: extractedFile.bytes,
+            contentType: extractedFile.contentType,
+          });
+          await admin
+            .from("media_assets")
+            .delete()
+            .eq("transcript_id", id)
+            .eq("kind", "extracted_audio");
+          await admin.from("media_assets").insert({
+            transcript_id: id,
+            user_id: user.id,
+            kind: "extracted_audio",
+            object_key: extractedKey,
+            content_type: extractedFile.contentType,
+            size_bytes: extractedFile.bytes.byteLength,
+            expires_at: original.expires_at,
+            status: "active",
+          });
+          return signed(
+            {
+              object_key: extractedKey,
+              expires_at: original.expires_at,
+              kind: "extracted_audio",
+              content_type: extractedFile.contentType,
+            },
+            { prepared: true },
+          );
+        }
+      } catch {
+        // Fall through to original video URL.
+      }
+    }
+
+    return signed(original);
+  }
+
+  const media = await loadKind(kindParam);
   if (!media) {
     return NextResponse.json({ error: "Media not found" }, { status: 404 });
   }
-
-  if (media.expires_at && new Date(media.expires_at) < new Date()) {
-    return NextResponse.json(
-      { error: "Original media has expired" },
-      { status: 410 },
-    );
-  }
-
-  const url = await createDownloadUrl({ objectKey: media.object_key });
-  return NextResponse.json({
-    url,
-    kind: media.kind,
-    expiresAt: media.expires_at,
-  });
+  return signed(media);
 }
