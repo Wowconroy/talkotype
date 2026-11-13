@@ -12,10 +12,7 @@ type Props = {
 const MODE_ART: Record<TranscriptionMode, { src: string; alt: string }> = {
   fast: { src: "/modes/swift.png", alt: "Cheetah — Swift mode" },
   balanced: { src: "/modes/steady.png", alt: "Dolphin leaping — Steady mode" },
-  accurate: {
-    src: "/modes/deep.png",
-    alt: "Careful listener taking notes — Deep mode",
-  },
+  accurate: { src: "/modes/deep.png", alt: "Blue whale diving — Deep mode" },
 };
 
 export function ModePicker({ value, onChange, disabled }: Props) {
