@@ -26,6 +26,9 @@ export async function transcribeWithGroq(params: {
   contentType?: string | null;
   model?: string | null;
   language?: string | null;
+  /** Style/vocab priming only. Avoid “don’t say X” — Whisper echoes it. */
+  prompt?: string | null;
+  temperature?: number;
 }): Promise<GroqTranscriptResult> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY is not configured.");
@@ -42,8 +45,13 @@ export async function transcribeWithGroq(params: {
   form.append("file", blob, params.filename || "audio.mp3");
   form.append("model", model);
   form.append("response_format", "verbose_json");
+  form.append("temperature", String(params.temperature ?? 0));
+  form.append("timestamp_granularities[]", "segment");
   if (params.language) {
     form.append("language", params.language);
+  }
+  if (params.prompt) {
+    form.append("prompt", params.prompt.slice(0, 800));
   }
 
   const res = await fetch(GROQ_URL, {

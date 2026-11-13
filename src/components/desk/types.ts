@@ -44,10 +44,10 @@ export type QuotaSnapshot = {
 
 export type DeskPlan = "free" | "unlimited" | string;
 
-/** Maps product modes → Whisper models (Steady shares Turbo until media prep). */
+/** Maps product modes → Whisper models. */
 export const MODE_TO_MODEL: Record<TranscriptionMode, string> = {
   fast: "whisper-large-v3-turbo",
-  balanced: "whisper-large-v3-turbo",
+  balanced: "whisper-large-v3",
   accurate: "whisper-large-v3",
 };
 
@@ -58,8 +58,8 @@ export const MODE_PRODUCT_LABEL: Record<TranscriptionMode, string> = {
 };
 
 export const MODEL_TO_MODE_LABEL: Record<string, string> = {
-  "whisper-large-v3-turbo": "Steady",
-  "whisper-large-v3": "Deep",
+  "whisper-large-v3-turbo": "Swift",
+  "whisper-large-v3": "Steady",
 };
 
 const STAGE_LABELS: Record<string, string> = {

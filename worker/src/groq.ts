@@ -16,6 +16,8 @@ export async function transcribeFile(params: {
   language?: string | null;
   model?: string | null;
   attempt?: number;
+  /** Vocab/style priming only — never “don’t say X”. */
+  prompt?: string | null;
 }): Promise<GroqResult> {
   const apiKey = process.env.GROQ_API_KEY?.trim();
   if (!apiKey) throw new Error("GROQ_API_KEY is not configured");
@@ -31,7 +33,10 @@ export async function transcribeFile(params: {
   );
   form.append("model", params.model || config.model);
   form.append("response_format", "verbose_json");
+  form.append("temperature", "0");
+  form.append("timestamp_granularities[]", "segment");
   if (params.language) form.append("language", params.language);
+  if (params.prompt) form.append("prompt", params.prompt.slice(0, 800));
 
   const attempt = params.attempt ?? 1;
   const res = await fetch(GROQ_URL, {

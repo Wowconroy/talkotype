@@ -142,12 +142,20 @@ export async function POST(_request: Request, { params }: Params) {
       media.object_key.split("/").pop() ||
       "audio.mp3";
 
+    const quality =
+      job?.requested_mode === "accurate" ||
+      job?.requested_mode === "balanced" ||
+      job?.model === "whisper-large-v3"
+        ? "deep"
+        : "standard";
+
     const normalised = await transcribeAudio({
       bytes,
       filename,
       contentType: media.content_type || contentType,
       model: job?.model,
       language: transcript.requested_language,
+      quality,
     });
 
     const rawResult = {

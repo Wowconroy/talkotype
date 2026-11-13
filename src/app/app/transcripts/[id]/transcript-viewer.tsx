@@ -130,13 +130,22 @@ export function TranscriptViewer({ id }: { id: string }) {
   const renderedBody = useMemo(() => {
     const segments = row?.segments ?? [];
     if (segments.length > 0) {
-      return segments.map((seg) => {
-        const stamp =
-          showTimestamps && seg.start_ms != null
-            ? `(${clock(seg.start_ms)}) `
-            : "";
-        return `${stamp}${seg.text}`.trim();
-      });
+      return segments
+        .filter((seg) => {
+          const t = (seg.text || "").trim();
+          if (!t) return false;
+          if (/^дякую за перегляд!?$/i.test(t)) return false;
+          if (/^thanks for watching!?$/i.test(t)) return false;
+          if (/^(музика|звучить музика)$/i.test(t)) return false;
+          return true;
+        })
+        .map((seg) => {
+          const stamp =
+            showTimestamps && seg.start_ms != null
+              ? `(${clock(seg.start_ms)}) `
+              : "";
+          return `${stamp}${seg.text}`.trim();
+        });
     }
     const plain = text.trim();
     if (!plain) return [] as string[];

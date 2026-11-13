@@ -31,11 +31,11 @@ export const TRANSCRIPTION_MODE_CONFIG: Record<
   balanced: {
     id: "balanced",
     productName: "Steady",
-    // Same engine as Swift until media preparation differentiates the path.
-    model: "whisper-large-v3-turbo",
+    // Full Whisper + lyric/speech prompt (better coverage than Turbo on songs).
+    model: "whisper-large-v3",
     provider: "whisper",
     tagline: "Best everyday pick",
-    accuracyClaim: "to_benchmark",
+    accuracyClaim: "operational",
   },
   accurate: {
     id: "accurate",
@@ -43,7 +43,7 @@ export const TRANSCRIPTION_MODE_CONFIG: Record<
     model: "whisper-large-v3",
     provider: "whisper",
     tagline: "Highest accuracy",
-    accuracyClaim: "to_benchmark",
+    accuracyClaim: "operational",
   },
 };
 
@@ -72,9 +72,15 @@ export function resolveModelForMode(
   return { mode, model: mode.model };
 }
 
+export function qualityForMode(
+  modeId?: string | null,
+): "standard" | "deep" {
+  return modeId === "accurate" || modeId === "balanced" ? "deep" : "standard";
+}
+
 export function productNameForModel(model: string | null | undefined): string {
   if (!model) return "—";
   if (model === "whisper-large-v3") return "Deep";
-  if (model === "whisper-large-v3-turbo") return "Steady";
+  if (model === "whisper-large-v3-turbo") return "Swift";
   return model.replace(/^whisper-/, "");
 }
