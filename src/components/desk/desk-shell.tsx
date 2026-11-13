@@ -426,6 +426,10 @@ export function DeskShell({ displayName, initial }: Props) {
       <ImportLinkModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
+        onBackToFiles={() => {
+          setImportOpen(false);
+          setTranscribeOpen(true);
+        }}
         folderId={folderIdForUpload}
         isUnlimited={plan === "unlimited"}
         limitReached={

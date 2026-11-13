@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link2, X } from "lucide-react";
+import { ArrowLeft, Link2, X } from "lucide-react";
 import { LanguageSelect } from "./language-select";
 import { ModePicker } from "./mode-picker";
 import {
@@ -20,6 +20,7 @@ import {
 type Props = {
   open: boolean;
   onClose: () => void;
+  onBackToFiles: () => void;
   folderId: string | null;
   isUnlimited: boolean;
   limitReached?: boolean;
@@ -29,6 +30,7 @@ type Props = {
 export function ImportLinkModal({
   open,
   onClose,
+  onBackToFiles,
   folderId,
   isUnlimited,
   limitReached = false,
@@ -47,14 +49,22 @@ export function ImportLinkModal({
     if (!open) {
       setHitLimit(false);
       setError(null);
+      setBusy(false);
+      setMoreOpen(false);
+      return;
     }
-  }, [open]);
+    setOptions(
+      isUnlimited
+        ? DEFAULT_TRANSCRIBE_OPTIONS
+        : { ...DEFAULT_TRANSCRIBE_OPTIONS, speakers: false },
+    );
+  }, [open, isUnlimited]);
 
   if (!open) return null;
 
   const blocked = limitReached || hitLimit;
 
-  async function onImport() {
+  async function onTranscribe() {
     if (blocked) {
       setHitLimit(true);
       return;
@@ -129,8 +139,8 @@ export function ImportLinkModal({
               Import from link
             </h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Paste a public media URL. We queue it for ingest — download
-              pipelines for YouTube and cloud drives ship next.
+              Paste a direct public media URL (MP3, MP4, and similar). YouTube,
+              Drive, and Dropbox download pipelines are not live yet.
             </p>
           </div>
           <button
@@ -146,14 +156,28 @@ export function ImportLinkModal({
           <QuotaLimitNotice className="mt-5" />
         ) : (
           <>
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onBackToFiles}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2 text-sm font-semibold text-ink hover:bg-mist disabled:opacity-60"
+              >
+                <ArrowLeft className="size-4 text-sea" />
+                Upload files
+              </button>
               {["YouTube", "Google Drive", "Dropbox", "Direct URL"].map(
                 (label) => (
                   <span
                     key={label}
-                    className="rounded-lg bg-mist px-2.5 py-1 text-xs font-semibold text-muted-foreground"
+                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                      label === "Direct URL"
+                        ? "bg-sea/15 text-ink"
+                        : "bg-mist text-muted-foreground"
+                    }`}
                   >
                     {label}
+                    {label !== "Direct URL" ? " · soon" : ""}
                   </span>
                 ),
               )}
@@ -204,30 +228,22 @@ export function ImportLinkModal({
           </>
         )}
 
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-mist"
-          >
-            {blocked ? "Close" : "Cancel"}
-          </button>
-          {blocked ? null : (
+        {blocked ? null : (
+          <div className="mt-6">
             <button
               type="button"
-              disabled={busy}
-              onClick={() => void onImport()}
-              className="rounded-xl bg-coral px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              disabled={busy || !url.trim()}
+              onClick={() => void onTranscribe()}
+              className="w-full rounded-xl bg-coral px-4 py-3 text-sm font-semibold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {busy ? "Queuing…" : "Import"}
+              {busy ? "Queuing…" : "Transcribe"}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
 
 function deriveTitle(url: string) {
   try {

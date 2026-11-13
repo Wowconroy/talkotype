@@ -161,19 +161,20 @@ export function TranscribeModal({
   const [hitLimit, setHitLimit] = useState(false);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [pendingPick, setPendingPick] = useState<File[] | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   useEffect(() => {
-    if (!open) {
-      setHitLimit(false);
-      setError(null);
-      setMessage(null);
-      setUploads([]);
-      setPendingPick(null);
-      setBusy(false);
-      setMoreOpen(false);
-      setDragging(false);
-      return;
-    }
+    if (!open) return;
+    // Fresh UI each time the modal opens. In-flight uploads keep running after close.
+    setHitLimit(false);
+    setError(null);
+    setMessage(null);
+    setUploads([]);
+    setPendingPick(null);
+    setSelectedFiles([]);
+    setBusy(false);
+    setMoreOpen(false);
+    setDragging(false);
     const saved = loadSavedOptions();
     // Free plan never keeps speakers on (menu is locked).
     setOptions(
@@ -312,8 +313,12 @@ export function TranscribeModal({
     }
   }
 
-  async function uploadFiles(fileList: FileList | File[]) {
-    // Copy immediately — clearing <input value> empties a live FileList.
+  function fileKey(file: File) {
+    return `${file.name}::${file.size}`;
+  }
+
+  /** Stage files for the Transcribe button — do not upload yet. */
+  function stageFiles(fileList: FileList | File[]) {
     const all = Array.from(fileList);
     if (all.length === 0) return;
 
@@ -323,7 +328,7 @@ export function TranscribeModal({
     );
 
     if (!decision.ok && decision.needsChoice) {
-      const byKey = new Map(all.map((f) => [`${f.name}::${f.size}`, f]));
+      const byKey = new Map(all.map((f) => [fileKey(f), f]));
       setPendingPick(
         decision.files
           .map((c) => byKey.get(`${c.name}::${c.size}`))
@@ -349,14 +354,13 @@ export function TranscribeModal({
     const allowedKeys = new Set(
       decision.files.map((f) => `${f.name}::${f.size}`),
     );
-    const files = all.filter((f) => allowedKeys.has(`${f.name}::${f.size}`));
-    if (files.length === 0) {
+    const incoming = all.filter((f) => allowedKeys.has(fileKey(f)));
+    if (incoming.length === 0) {
       setError("No valid files to upload.");
       return;
     }
 
-    // Pre-validate so rejected formats show before the pool starts.
-    const rejected = files
+    const rejected = incoming
       .map((file) => ({
         file,
         result: validateUploadCandidate(plan, {
@@ -367,14 +371,43 @@ export function TranscribeModal({
       }))
       .filter((item) => !item.result.ok);
 
-    if (rejected.length === files.length) {
-      setError(rejected[0]?.result.ok === false ? rejected[0].result.error : "File rejected.");
+    if (rejected.length === incoming.length) {
+      setError(
+        rejected[0]?.result.ok === false
+          ? rejected[0].result.error
+          : "File rejected.",
+      );
       return;
     }
 
+    const accepted = incoming.filter((file) =>
+      validateUploadCandidate(plan, {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      }).ok,
+    );
+
     setPendingPick(null);
+    setMessage(null);
+    setSelectedFiles((prev) => {
+      const merged = new Map(prev.map((f) => [fileKey(f), f]));
+      for (const file of accepted) merged.set(fileKey(file), file);
+      const next = Array.from(merged.values());
+      if (!isUnlimited && next.length > 1) {
+        // Free plan: keep the latest single file.
+        return [next[next.length - 1]!];
+      }
+      return next.slice(0, decision.maxBatch ?? next.length);
+    });
+  }
+
+  async function uploadFiles(files: File[]) {
+    if (files.length === 0) return;
+
     setBusy(true);
     setMessage(null);
+    setError(null);
 
     const items: UploadItem[] = files.map((file, i) => ({
       id: `${Date.now()}-${i}-${file.name}`,
@@ -384,7 +417,7 @@ export function TranscribeModal({
     }));
     setUploads(items);
 
-    const work = files.map((file, i) => ({ file, id: items[i].id }));
+    const work = files.map((file, i) => ({ file, id: items[i]!.id }));
     const concurrency = uploadPoolSize(plan);
     const results: Array<"done" | "error" | "cancelled"> = [];
     await runPool(work, concurrency, async ({ file, id }) => {
@@ -395,17 +428,29 @@ export function TranscribeModal({
     const doneCount = results.filter((r) => r === "done").length;
     const failCount = results.filter((r) => r === "error").length;
 
-    // All queued successfully — close so the desk shows live progress.
     if (doneCount > 0 && failCount === 0) {
-      onClose();
       return;
     }
 
+    // Modal may already be closed — surface failures on next open via desk poll.
     setMessage(
       doneCount > 0
         ? `Uploaded ${doneCount} file${doneCount === 1 ? "" : "s"}; ${failCount} failed.`
         : "Upload failed. Fix the error and try again.",
     );
+  }
+
+  function startTranscribe() {
+    if (busy || blocked || selectedFiles.length === 0) return;
+    const files = [...selectedFiles];
+    setSelectedFiles([]);
+    // Close immediately; upload + desk progress continue in the background.
+    onClose();
+    void uploadFiles(files);
+  }
+
+  function removeSelected(file: File) {
+    setSelectedFiles((prev) => prev.filter((f) => fileKey(f) !== fileKey(file)));
   }
 
   function cancelUpload(id: string) {
@@ -425,7 +470,7 @@ export function TranscribeModal({
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (files.length === 0) return; // cancelled picker; keep existing selection
-    void uploadFiles(files);
+    stageFiles(files);
   }
 
   return (
@@ -505,7 +550,7 @@ export function TranscribeModal({
                 setDragging(false);
                 if (busy) return;
                 const files = Array.from(e.dataTransfer.files ?? []);
-                if (files.length) void uploadFiles(files);
+                if (files.length) stageFiles(files);
               }}
               className={`mt-3 cursor-pointer rounded-2xl border border-dashed px-5 py-10 text-center transition outline-none focus-visible:ring-2 focus-visible:ring-sea ${
                 dragging
@@ -517,10 +562,10 @@ export function TranscribeModal({
                 <Upload className="size-5" />
               </div>
               <p className="font-display text-lg font-semibold text-ink">
-                {busy
-                  ? "Uploading…"
-                  : dragging
-                    ? "Drop to upload"
+                {dragging
+                  ? "Drop to add files"
+                  : selectedFiles.length > 0
+                    ? "Add more files, or click Transcribe below."
                     : "Drag and drop files here, or click to browse."}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -601,7 +646,7 @@ export function TranscribeModal({
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => void uploadFiles([file])}
+                        onClick={() => stageFiles([file])}
                         className="w-full rounded-xl border border-border bg-white px-3 py-2 text-left text-sm text-ink hover:border-sea"
                       >
                         {file.name}{" "}
@@ -613,6 +658,33 @@ export function TranscribeModal({
                   ))}
                 </ul>
               </div>
+            ) : null}
+
+            {selectedFiles.length > 0 ? (
+              <ul className="mt-4 space-y-2">
+                {selectedFiles.map((file) => (
+                  <li
+                    key={fileKey(file)}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-border/80 bg-white px-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-ink">
+                        {file.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatBytes(file.size)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeSelected(file)}
+                      className="shrink-0 text-xs font-semibold text-coral hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
             ) : null}
 
             {uploads.length > 0 ? (
@@ -676,15 +748,22 @@ export function TranscribeModal({
           </>
         )}
 
-        <div className="mt-6 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-mist"
-          >
-            Close
-          </button>
-        </div>
+        {blocked ? null : (
+          <div className="mt-6">
+            <button
+              type="button"
+              disabled={busy || selectedFiles.length === 0}
+              onClick={() => startTranscribe()}
+              className="w-full rounded-xl bg-coral px-4 py-3 text-sm font-semibold text-white transition hover:bg-coral/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {selectedFiles.length === 0
+                ? "Transcribe"
+                : selectedFiles.length === 1
+                  ? "Transcribe"
+                  : `Transcribe ${selectedFiles.length} files`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
