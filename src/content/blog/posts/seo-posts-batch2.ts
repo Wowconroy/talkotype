@@ -441,4 +441,339 @@ export const seoPostsBatch2: BlogPost[] = [
       },
     ],
   },
+{
+    slug: "how-to-convert-m4a-to-text",
+    title: "How to Convert an M4A Recording to Text",
+    description:
+      "Turn an M4A voice memo or interview into searchable text without converting to MP3 first. Talkotype walkthrough and sample transcript.",
+    date: "2026-11-13",
+    primaryQuery: "convert m4a to text",
+    intent: "informational",
+    country: "US",
+    coverTheme: "coral",
+    coverIcon: "audio",
+    readingMinutes: 6,
+    related: [
+      "how-to-transcribe-iphone-voice-memo",
+      "how-to-convert-mp3-to-text",
+      "how-to-convert-wav-to-text",
+    ],
+    sources: [],
+    seoNotes: "Complements MP3 guide; Apple/voice-memo adjacent.",
+    blocks: [
+      {
+        type: "p",
+        text: "M4A is the default for many phone memos and interview apps. Converting M4A to text means speech recognition on the file, not a mandatory trip through an MP3 converter.",
+      },
+      {
+        type: "h2",
+        text: "Fast path in Talkotype",
+      },
+      {
+        type: "ol",
+        items: [
+          "Keep the original M4A. Do not re-encode unless the file will not upload.",
+          "[Sign up](/signup) and open [your desk](/app).",
+          "Upload the M4A, choose the spoken language if you know it, and start transcription.",
+          "Click timestamps to verify names, then export TXT (Free) or DOCX/PDF on Unlimited.",
+        ],
+      },
+      { type: "demo", variant: "waveform" },
+      {
+        type: "sample",
+        label: "M4A interview snippet (synthetic)",
+        note: "Demo labels only.",
+        lines: [
+          {
+            time: "00:01:02",
+            speaker: "Host",
+            text: "When did you switch the pricing page to yearly billing?",
+          },
+          {
+            time: "00:01:08",
+            speaker: "Guest",
+            text: "Mid-October. The $14 monthly equivalent made the math easier to explain.",
+          },
+        ],
+      },
+      {
+        type: "h2",
+        text: "M4A vs MP3 vs WAV",
+      },
+      {
+        type: "table",
+        headers: ["Format", "Typical source", "Talkotype tip"],
+        rows: [
+          ["M4A", "iPhone Voice Memos, many recorders", "Upload as-is"],
+          ["MP3", "Podcasts, shared downloads", "See [convert MP3 to text](/blog/how-to-convert-mp3-to-text)"],
+          ["WAV", "Studio or lossless exports", "Larger files; still fine under plan limits"],
+        ],
+      },
+      {
+        type: "cta",
+        text: "Have an M4A on your desk?",
+        href: "/signup",
+        label: "Convert M4A to text",
+      },
+    ],
+  },
+  {
+    slug: "how-to-convert-wav-to-text",
+    title: "How to Convert a WAV File to Text",
+    description:
+      "Transcribe WAV interviews and studio takes in Talkotype. Why lossless audio helps accuracy, plus size and export tips.",
+    date: "2026-11-13",
+    primaryQuery: "convert wav to text",
+    intent: "informational",
+    country: "US",
+    coverTheme: "mint",
+    coverIcon: "audio",
+    readingMinutes: 6,
+    related: [
+      "how-to-convert-m4a-to-text",
+      "how-to-convert-mp3-to-text",
+      "what-affects-ai-transcription-accuracy",
+    ],
+    sources: [],
+    seoNotes: "Lossless audio long-tail.",
+    blocks: [
+      {
+        type: "p",
+        text: "WAV keeps a full-fidelity soundtrack. That can help speech recognition when the room was already clean. The tradeoff is file size — still within Talkotype’s upload caps for most interview lengths.",
+      },
+      {
+        type: "h2",
+        text: "Do this",
+      },
+      {
+        type: "ol",
+        items: [
+          "Export WAV from your DAW or recorder (mono or stereo is fine).",
+          "Upload at [your desk](/app) after [signing up](/signup).",
+          "Transcribe, then polish proper nouns once while listening.",
+          "Export TXT, or Unlimited DOCX/PDF for stakeholders.",
+        ],
+      },
+      {
+        type: "callout",
+        title: "Limits",
+        text: "Free: three transcripts a day, first 30 minutes of a file. Unlimited: up to three hours or 5 GB per file. If a WAV is huge, export a high-quality M4A/MP3 of the same take.",
+      },
+      { type: "demo", variant: "upload" },
+      {
+        type: "p",
+        text: "Accuracy still depends on mic placement and noise. Pair this guide with [what affects AI transcription accuracy](/blog/what-affects-ai-transcription-accuracy).",
+      },
+      {
+        type: "cta",
+        text: "Ready to transcribe a WAV?",
+        href: "/signup",
+        label: "Start free",
+      },
+    ],
+  },
+  {
+    slug: "how-to-transcribe-mov-video",
+    title: "How to Transcribe an MOV Video",
+    description:
+      "Upload QuickTime MOV files for transcription without extracting audio first. Troubleshooting silent exports and iPhone camera clips.",
+    date: "2026-11-13",
+    primaryQuery: "how to transcribe mov video",
+    intent: "informational",
+    country: "US",
+    coverTheme: "lemon",
+    coverIcon: "video",
+    readingMinutes: 6,
+    related: [
+      "how-to-get-transcript-from-mp4",
+      "how-to-transcribe-video-to-text",
+      "how-to-transcribe-screen-recording",
+    ],
+    sources: [],
+    seoNotes: "Complements MP4 guide; Apple camera/Final Cut angle.",
+    blocks: [
+      {
+        type: "p",
+        text: "MOV is a common container from iPhone cameras and Final Cut exports. Talkotype reads the audio track inside the MOV the same way it reads an MP4.",
+      },
+      {
+        type: "ol",
+        items: [
+          "Play the MOV and confirm speech is audible.",
+          "[Sign up](/signup) → [desk](/app) → upload the MOV.",
+          "Transcribe, click sentences to re-listen, export what you need.",
+        ],
+      },
+      {
+        type: "h2",
+        text: "MOV-specific snags",
+      },
+      {
+        type: "ul",
+        items: [
+          "Silent screen recordings: re-export with microphone enabled. See [screen recording transcription](/blog/how-to-transcribe-screen-recording).",
+          "Huge camera rolls: trim to the chapter you need, especially on Free’s 30-minute window.",
+          "Odd codecs: if upload fails, re-export as H.264 MP4 and retry via [MP4 transcript guide](/blog/how-to-get-transcript-from-mp4).",
+        ],
+      },
+      { type: "demo", variant: "upload" },
+      {
+        type: "cta",
+        text: "Have an MOV with real audio?",
+        href: "/signup",
+        label: "Transcribe MOV",
+      },
+    ],
+  },
+  {
+    slug: "how-to-transcribe-bilingual-interview",
+    title: "How to Transcribe a Bilingual Interview",
+    description:
+      "Handle interviews that switch languages mid-sentence. Language picker tips, mixed EN/UA sample, and cleanup checklist for Talkotype.",
+    date: "2026-11-13",
+    primaryQuery: "bilingual interview transcription",
+    intent: "informational",
+    country: "US",
+    coverTheme: "blush",
+    coverIcon: "users",
+    readingMinutes: 8,
+    related: [
+      "how-to-transcribe-ukrainian-audio-video",
+      "how-to-transcribe-research-interview",
+      "how-to-label-speakers-in-transcript",
+    ],
+    sources: [],
+    seoNotes: "Distinct from Ukrainian-only guide; code-switching focus.",
+    blocks: [
+      {
+        type: "p",
+        text: "Bilingual interviews rarely stay in one language. People borrow words, switch for emphasis, or answer in the language of the question. Your job is to pick a primary language on upload, then clean the switches by ear.",
+      },
+      {
+        type: "h2",
+        text: "Before you upload",
+      },
+      {
+        type: "ul",
+        items: [
+          "Note which language dominates the hour.",
+          "List proper nouns in both languages (names, cities, product brands).",
+          "Prefer separate mics when possible; crosstalk hurts every language equally.",
+        ],
+      },
+      {
+        type: "h2",
+        text: "In Talkotype",
+      },
+      {
+        type: "ol",
+        items: [
+          "Upload the interview from [your desk](/app).",
+          "Set the language to the dominant spoken language. For Ukrainian-heavy tapes, also see [transcribe Ukrainian audio and video](/blog/how-to-transcribe-ukrainian-audio-video).",
+          "On Unlimited, enable speaker labels so turns stay clear while languages flip.",
+          "Click timestamps wherever a switch sounds wrong and fix that span only.",
+        ],
+      },
+      {
+        type: "sample",
+        label: "Mixed EN/UA sample (synthetic)",
+        note: "Illustrative code-switching. Not a customer interview.",
+        lines: [
+          {
+            time: "00:12:04",
+            speaker: "Interviewer",
+            text: "Can you describe the launch week in Kyiv?",
+          },
+          {
+            time: "00:12:09",
+            speaker: "Guest",
+            text: "We soft-launched on Monday. У вівторок вже були перші Unlimited підписки.",
+          },
+          {
+            time: "00:12:18",
+            speaker: "Interviewer",
+            text: "And the FAQ — English only at first?",
+          },
+          {
+            time: "00:12:22",
+            speaker: "Guest",
+            text: "Yes. Ukrainian answers came after we saw support tickets stacking up.",
+          },
+        ],
+      },
+      {
+        type: "checklist",
+        items: [
+          "Do not silently translate quoted speech unless your style guide says so.",
+          "Mark unclear switches with `[unclear]` while you listen once.",
+          "Export DOCX on Unlimited when editors need tracked changes later.",
+        ],
+      },
+      {
+        type: "cta",
+        text: "Working with a bilingual interview file?",
+        href: "/signup",
+        label: "Transcribe it",
+      },
+    ],
+  },
+  {
+    slug: "click-transcript-timestamp-to-play-audio",
+    title: "How to Click a Transcript Timestamp to Play Audio",
+    description:
+      "Use Talkotype’s inline timestamps to jump the player to the exact sentence you are editing. Workflow for verifying names, numbers, and unclear speech.",
+    date: "2026-11-13",
+    primaryQuery: "click transcript timestamp to play audio",
+    intent: "informational",
+    country: "US",
+    coverTheme: "ink",
+    coverIcon: "clock",
+    readingMinutes: 5,
+    related: [
+      "how-to-add-timestamps-to-transcript",
+      "how-to-fix-ai-transcript",
+      "fix-missing-words-in-ai-transcript",
+    ],
+    sources: [],
+    seoNotes: "Product feature page; pairs with timestamp theory article.",
+    blocks: [
+      {
+        type: "p",
+        text: "A timestamp is only useful if you can hear the moment it points to. In Talkotype, finished transcripts show compact inline `(m:ss)` stamps. Click a stamp or the sentence beside it to open the sticky player and seek there.",
+      },
+      {
+        type: "h2",
+        text: "How to use it",
+      },
+      {
+        type: "ol",
+        items: [
+          "Open a completed transcript from [your desk](/app).",
+          "Keep Show timestamps enabled in the side panel.",
+          "Click any sentence — or its grey timestamp — to play from that point.",
+          "Fix the line while it is fresh, then jump to the next uncertain span.",
+        ],
+      },
+      { type: "demo", variant: "fix" },
+      {
+        type: "callout",
+        title: "Why the layout is dense",
+        text: "Timestamps sit between sentences in paragraph form so you can scan quickly. That is different from one sentence per row. For patterns and export formats, see [how to add timestamps to a transcript](/blog/how-to-add-timestamps-to-transcript).",
+      },
+      {
+        type: "checklist",
+        items: [
+          "Verify every proper noun at least once.",
+          "Re-listen spans with numbers, emails, and URLs.",
+          "If audio will not seek, re-download or re-run transcription after media expires on Free (7-day storage).",
+        ],
+      },
+      {
+        type: "cta",
+        text: "Want to try click-to-play on your own file?",
+        href: "/signup",
+        label: "Upload a recording",
+      },
+    ],
+  },
 ];
