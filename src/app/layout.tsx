@@ -16,7 +16,10 @@ const body = Figtree({
   weight: ["400", "500", "600", "700"],
 });
 
+const site = process.env.NEXT_PUBLIC_SITE_URL || "https://talkotype.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(site),
   title: {
     default: "Talkotype — Fun, easy audio & video transcription",
     template: "%s · Talkotype",
@@ -26,6 +29,11 @@ export const metadata: Metadata = {
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/apple-icon", type: "image/png" }],
+  },
+  openGraph: {
+    type: "website",
+    siteName: "Talkotype",
+    locale: "en_US",
   },
 };
 

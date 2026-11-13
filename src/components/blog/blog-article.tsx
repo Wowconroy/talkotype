@@ -195,23 +195,55 @@ export function BlogArticle({ post }: { post: BlogPost }) {
     .map((slug) => getPostBySlug(slug))
     .filter(Boolean);
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "BlogPosting",
-    headline: post.title,
-    description: post.description,
-    datePublished: post.date,
-    dateModified: post.updated || post.date,
-    author: {
-      "@type": "Organization",
-      name: "Talkotype",
+  const site = process.env.NEXT_PUBLIC_SITE_URL || "https://talkotype.app";
+  const pageUrl = `${site}/blog/${post.slug}`;
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      headline: post.title,
+      description: post.description,
+      datePublished: post.date,
+      dateModified: post.updated || post.date,
+      author: {
+        "@type": "Organization",
+        name: "Talkotype",
+        url: site,
+      },
+      publisher: {
+        "@type": "Organization",
+        name: "Talkotype",
+        url: site,
+      },
+      mainEntityOfPage: pageUrl,
+      url: pageUrl,
+      inLanguage: "en",
     },
-    publisher: {
-      "@type": "Organization",
-      name: "Talkotype",
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: site,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Blog",
+          item: `${site}/blog`,
+        },
+        {
+          "@type": "ListItem",
+          position: 3,
+          name: post.title,
+          item: pageUrl,
+        },
+      ],
     },
-    mainEntityOfPage: `https://talkotype.app/blog/${post.slug}`,
-  };
+  ];
 
   return (
     <article className="mx-auto w-full max-w-3xl px-4 py-14 sm:px-6 sm:py-16">

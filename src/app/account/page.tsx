@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: "Account Settings",
   description:
     "Manage your Talkotype plan, email, notification preferences, invoices, and account deletion.",
+  robots: { index: false, follow: false },
 };
 
 export const instant = false;

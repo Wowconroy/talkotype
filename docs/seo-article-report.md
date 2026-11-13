@@ -5,7 +5,7 @@ Generated with product claims verified against pricing, FAQ, privacy, and homepa
 ## Verified product facts used in articles
 - Formats: MP3, M4A, WAV, MP4, MOV
 - Free: 3 transcripts/day, TXT export
-- Unlimited: up to 5 hours, speaker labels, PDF/DOCX/SRT
+- Unlimited: up to 3 hours, speaker labels, PDF/DOCX/SRT
 - Privacy: user can delete uploads/transcripts; content not sold
 - Language picker mentioned on homepage workflow
 
@@ -16,7 +16,7 @@ Generated with product claims verified against pricing, FAQ, privacy, and homepa
 | /blog/how-to-transcribe-video-to-text | how to transcribe a video to text | US | coral/video cover + demo where noted | Broad how-to with product walkthrough; links to MP4-specific guide. |
 | /blog/how-to-get-transcript-from-mp4 | how to get a transcript from an MP4 | US | mint/video cover + demo where noted | Long-tail format query; troubleshooting angle vs broad video guide. |
 | /blog/how-to-convert-mp3-to-text | convert mp3 to text | US | lemon/audio cover + demo where noted | Audio-format long-tail; sample transcript + exports. |
-| /blog/how-to-transcribe-long-recording | how to transcribe a long recording | US | ink/clock cover + demo where noted | Limit-aware workflow; Unlimited 5-hour claim verified from pricing. |
+| /blog/how-to-transcribe-long-recording | how to transcribe a long recording | US | ink/clock cover + demo where noted | Limit-aware workflow; Unlimited 3-hour claim verified from pricing. |
 | /blog/how-to-get-youtube-video-transcript | how to get a youtube video transcript | US | blush/video cover + demo where noted | Official YouTube Help citations; Talkotype path for owned files. |
 | /blog/how-to-transcribe-ukrainian-audio-video | transcribe Ukrainian audio | UA | mint/audio cover + demo where noted | Localized intent UA/EN; sample with mixed languages. |
 | /blog/how-to-transcribe-a-podcast | how to transcribe a podcast | US | coral/audio cover + demo where noted | Creator workflow; links to MP3 + speakers. |

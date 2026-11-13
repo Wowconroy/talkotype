@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -6,6 +7,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const instant = false;
 
 type Props = { params: Promise<{ token: string }> };
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: "Shared transcript",
+    robots: { index: false, follow: false },
+  };
+}
 
 export default function SharePage({ params }: Props) {
   return (
