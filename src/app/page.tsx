@@ -1,5 +1,4 @@
 import { Headphones, Sparkles, Timer, Waves } from "lucide-react";
-import { HomeCtaBanner } from "@/components/home-cta-banner";
 import { ReviewsSlider } from "@/components/reviews-slider";
 import { StoryHero } from "@/components/story-hero";
 import { UnlimitedWelcome } from "@/components/unlimited-welcome";
@@ -127,11 +126,9 @@ export default function Home() {
         </div>
       </section>
 
-      <UnlimitedWelcome hideWhenLoggedIn />
+      <UnlimitedWelcome />
 
       <ReviewsSlider />
-
-      <HomeCtaBanner />
     </>
   );
 }
