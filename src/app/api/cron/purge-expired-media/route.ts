@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { purgeExpiredMedia } from "@/lib/purge-expired-media";
 
-export const runtime = "nodejs";
 export const maxDuration = 60;
 
 function authorize(request: Request) {
