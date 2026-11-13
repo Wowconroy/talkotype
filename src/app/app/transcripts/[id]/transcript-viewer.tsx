@@ -24,6 +24,7 @@ import {
   clockFromMs,
   groupSegmentsIntoParagraphs,
   isJunkDisplayText,
+  syntheticSegmentsFromText,
   type DisplaySegment,
 } from "@/lib/transcript-display";
 
@@ -151,34 +152,33 @@ export function TranscriptViewer({ id }: { id: string }) {
 
   const displaySegments = useMemo((): DisplaySegment[] => {
     const segments = row?.segments ?? [];
-    if (segments.length === 0) return [];
-    return segments
-      .filter((seg) => !isJunkDisplayText(seg.text || ""))
-      .map((seg) => ({
-        segment_index: seg.segment_index,
-        start_ms: seg.start_ms,
-        end_ms: seg.end_ms,
-        text: (seg.text || "").trim(),
-        speaker_id: seg.speaker_id,
-        speaker_label: seg.speaker_id
-          ? (speakerLabelById.get(seg.speaker_id) ?? null)
-          : null,
-      }));
-  }, [row?.segments, speakerLabelById]);
+    if (segments.length > 0) {
+      return segments
+        .filter((seg) => !isJunkDisplayText(seg.text || ""))
+        .map((seg) => ({
+          segment_index: seg.segment_index,
+          start_ms: seg.start_ms,
+          end_ms: seg.end_ms,
+          text: (seg.text || "").trim(),
+          speaker_id: seg.speaker_id,
+          speaker_label: seg.speaker_id
+            ? (speakerLabelById.get(seg.speaker_id) ?? null)
+            : null,
+        }));
+    }
+    // Older / broken rows: rebuild clickable sentences from plain text.
+    if ((text || "").trim()) {
+      return syntheticSegmentsFromText(text, row?.duration_seconds);
+    }
+    return [];
+  }, [row?.segments, row?.duration_seconds, speakerLabelById, text]);
 
   const paragraphs = useMemo(
     () => groupSegmentsIntoParagraphs(displaySegments),
     [displaySegments],
   );
 
-  const plainParagraphs = useMemo(() => {
-    if (displaySegments.length > 0) return [] as string[];
-    return text
-      .trim()
-      .split(/\n+/)
-      .map((p) => p.trim())
-      .filter(Boolean);
-  }, [displaySegments.length, text]);
+  const usingSyntheticSegments = (row?.segments?.length ?? 0) === 0;
 
   const ensureMediaUrl = useCallback(async () => {
     if (playerSrc) return playerSrc;
@@ -415,11 +415,11 @@ export function TranscriptViewer({ id }: { id: string }) {
                   playerOpen ? "pb-24" : ""
                 }`}
               >
-                {paragraphs.length === 0 && plainParagraphs.length === 0 ? (
+                {paragraphs.length === 0 ? (
                   <p className="text-muted-foreground">
                     This transcript does not have text yet.
                   </p>
-                ) : paragraphs.length > 0 ? (
+                ) : (
                   <div className="space-y-5">
                     {paragraphs.map((para, pi) => (
                       <p key={`p-${pi}`} className="text-pretty">
@@ -463,16 +463,13 @@ export function TranscriptViewer({ id }: { id: string }) {
                       </p>
                     ))}
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {plainParagraphs.map((line, i) => (
-                      <p key={`${i}-${line.slice(0, 12)}`}>{line}</p>
-                    ))}
-                  </div>
                 )}
                 {displaySegments.length > 0 ? (
                   <p className="mt-4 text-xs text-muted-foreground">
                     Click a sentence or timestamp to play audio from that moment.
+                    {usingSyntheticSegments
+                      ? " Timestamps are approximate for this file — re-run transcription for exact sync."
+                      : ""}
                   </p>
                 ) : null}
               </div>

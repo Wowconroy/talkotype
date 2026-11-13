@@ -34,8 +34,8 @@ export async function transcribeFile(params: {
   form.append("model", params.model || config.model);
   form.append("response_format", "verbose_json");
   form.append("temperature", "0");
-  form.append("timestamp_granularities[]", "segment");
   form.append("timestamp_granularities[]", "word");
+  form.append("timestamp_granularities[]", "segment");
   if (params.language) {
     // Whisper expects ISO-639-1; map en-GB / en-US → en
     const lang = params.language.toLowerCase().startsWith("en")
@@ -92,21 +92,51 @@ export async function transcribeFile(params: {
     }))
     .filter((s) => s.text);
 
-  // Prefer first-word start inside each segment (Whisper segments run early).
-  const segments = rawSegments.map((seg) => {
-    const inRange = words.filter(
-      (w) => w.start >= seg.start - 0.35 && w.start <= seg.end + 0.15,
-    );
-    if (inRange.length === 0) return seg;
-    return {
-      ...seg,
-      start: inRange[0].start,
-      end: Math.max(seg.end, inRange[inRange.length - 1].end),
+  // Prefer first-word start; if provider returned words only, rebuild segments.
+  let segments =
+    rawSegments.length > 0
+      ? rawSegments.map((seg) => {
+          const inRange = words.filter(
+            (w) => w.start >= seg.start - 0.35 && w.start <= seg.end + 0.15,
+          );
+          if (inRange.length === 0) return seg;
+          return {
+            ...seg,
+            start: inRange[0].start,
+            end: Math.max(seg.end, inRange[inRange.length - 1].end),
+          };
+        })
+      : [];
+
+  if (segments.length === 0 && words.length > 0) {
+    const out: Array<{ start: number; end: number; text: string }> = [];
+    let buf: typeof words = [];
+    const flush = () => {
+      if (buf.length === 0) return;
+      out.push({
+        start: buf[0].start,
+        end: buf[buf.length - 1].end,
+        text: buf
+          .map((w) => w.word)
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim(),
+      });
+      buf = [];
     };
-  });
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      const next = words[i + 1];
+      buf.push(w);
+      const ended = /[.!?…]$/.test(w.word);
+      const longPause = next ? next.start - w.end >= 0.7 : false;
+      if (ended || longPause || buf.length >= 16 || !next) flush();
+    }
+    segments = out.filter((s) => s.text);
+  }
 
   return {
-    text: (payload.text || "").trim(),
+    text: (payload.text || "").trim() || segments.map((s) => s.text).join(" "),
     language: payload.language ?? null,
     duration:
       typeof payload.duration === "number"

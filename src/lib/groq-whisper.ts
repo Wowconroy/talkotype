@@ -4,7 +4,7 @@
  */
 
 import {
-  refineSegmentsWithWords,
+  ensureTimedSegments,
   type WordStamp,
 } from "@/lib/transcript-display";
 
@@ -52,9 +52,11 @@ export async function transcribeWithGroq(params: {
   form.append("model", model);
   form.append("response_format", "verbose_json");
   form.append("temperature", String(params.temperature ?? 0));
-  // Segment + word stamps: word starts correct early segment boundaries.
-  form.append("timestamp_granularities[]", "segment");
+  // Word first, segment last — if a parser keeps only the last value we still
+  // get segments (previous working behaviour). ensureTimedSegments rebuilds
+  // from words when the opposite happens.
   form.append("timestamp_granularities[]", "word");
+  form.append("timestamp_granularities[]", "segment");
   if (params.language) {
     // Whisper expects ISO-639-1; map en-GB / en-US → en
     const lang = params.language.toLowerCase().startsWith("en")
@@ -118,14 +120,18 @@ export async function transcribeWithGroq(params: {
     }))
     .filter((s) => s.text);
 
+  // Some providers keep only the last timestamp_granularities[] value and
+  // return words without segments — rebuild sentence segments when needed.
+  const segments = ensureTimedSegments(rawSegments, words);
+
   return {
-    text: (payload.text || "").trim(),
+    text: (payload.text || "").trim() || segments.map((s) => s.text).join(" "),
     language: payload.language ?? null,
     duration:
       typeof payload.duration === "number"
         ? Math.round(payload.duration)
         : null,
-    segments: refineSegmentsWithWords(rawSegments, words),
+    segments,
     words,
   };
 }

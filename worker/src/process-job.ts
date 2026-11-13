@@ -201,7 +201,7 @@ export async function processTranscript(transcriptId: string) {
       }
 
       if (diarized.segments.length > 0) {
-        await sb.from("transcript_segments").insert(
+        const { error: segErr } = await sb.from("transcript_segments").insert(
           diarized.segments.map((seg, index) => ({
             transcript_id: transcriptId,
             user_id: transcript.user_id,
@@ -215,6 +215,7 @@ export async function processTranscript(transcriptId: string) {
               : null,
           })),
         );
+        if (segErr) throw new Error(segErr.message);
       }
 
       const { error: pubErr } = await sb.rpc("publish_job_transcript", {
@@ -363,7 +364,7 @@ export async function processTranscript(transcriptId: string) {
     await sb.from("transcript_segments").delete().eq("transcript_id", transcriptId);
     await sb.from("transcript_speakers").delete().eq("transcript_id", transcriptId);
     if (segments.length > 0) {
-      await sb.from("transcript_segments").insert(
+      const { error: segErr } = await sb.from("transcript_segments").insert(
         segments.map((seg, index) => ({
           transcript_id: transcriptId,
           user_id: transcript.user_id,
@@ -374,6 +375,7 @@ export async function processTranscript(transcriptId: string) {
           text: seg.text,
         })),
       );
+      if (segErr) throw new Error(segErr.message);
     }
 
     const { error: pubErr } = await sb.rpc("publish_job_transcript", {

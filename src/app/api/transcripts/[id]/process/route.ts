@@ -317,20 +317,27 @@ export async function POST(_request: Request, { params }: Params) {
     }
 
     if (result.segments && result.segments.length > 0) {
-      await admin.from("transcript_segments").insert(
-        result.segments.map((seg, index) => ({
-          transcript_id: id,
-          user_id: user.id,
-          job_id: transcript.active_job_id,
-          segment_index: index,
-          start_ms: Math.max(0, Math.round(seg.start * 1000)),
-          end_ms: Math.max(0, Math.round(seg.end * 1000)),
-          text: seg.text,
-          speaker_id: seg.speaker
-            ? (speakerIdByLabel.get(seg.speaker) ?? null)
-            : null,
-        })),
-      );
+      const segmentRows = result.segments.map((seg, index) => ({
+        transcript_id: id,
+        user_id: user.id,
+        job_id: transcript.active_job_id,
+        segment_index: index,
+        start_ms: Math.max(0, Math.round(seg.start * 1000)),
+        end_ms: Math.max(0, Math.round(seg.end * 1000)),
+        text: seg.text,
+        speaker_id: seg.speaker
+          ? (speakerIdByLabel.get(seg.speaker) ?? null)
+          : null,
+      }));
+      // Batch inserts — a silent full-payload failure left only plain text.
+      const BATCH = 200;
+      for (let i = 0; i < segmentRows.length; i += BATCH) {
+        const chunk = segmentRows.slice(i, i + BATCH);
+        const { error: segErr } = await admin
+          .from("transcript_segments")
+          .insert(chunk);
+        if (segErr) throw new Error(segErr.message);
+      }
     }
 
     const { data: published, error: publishError } = await admin.rpc(
