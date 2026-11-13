@@ -51,6 +51,25 @@ export async function POST(request: Request, { params }: Params) {
     .update({ status: "queued", updated_at: new Date().toISOString() })
     .eq("id", id);
 
+  const origin = new URL(request.url).origin;
+  const cookie = request.headers.get("cookie") ?? "";
+
+  async function kickVercelProcess() {
+    const processRes = await fetch(`${origin}/api/transcripts/${id}/process`, {
+      method: "POST",
+      headers: { cookie },
+      signal: AbortSignal.timeout(290_000),
+    });
+    if (!processRes.ok) {
+      const body = await processRes.text().catch(() => "");
+      console.error(
+        "[complete-upload] process failed",
+        processRes.status,
+        body.slice(0, 300),
+      );
+    }
+  }
+
   const useWorker = isTranscriptionWorkerConfigured();
 
   if (useWorker) {
@@ -58,13 +77,25 @@ export async function POST(request: Request, { params }: Params) {
       try {
         const result = await dispatchTranscriptionJob(id);
         if (!result.ok) {
-          console.error("[complete-upload] worker dispatch failed", result);
+          console.error(
+            "[complete-upload] worker dispatch failed — falling back to Vercel",
+            result,
+          );
+          await kickVercelProcess();
         }
       } catch (err) {
         console.error(
-          "[complete-upload] worker dispatch error",
+          "[complete-upload] worker dispatch error — falling back to Vercel",
           err instanceof Error ? err.message : err,
         );
+        try {
+          await kickVercelProcess();
+        } catch (fallbackErr) {
+          console.error(
+            "[complete-upload] Vercel fallback failed",
+            fallbackErr instanceof Error ? fallbackErr.message : fallbackErr,
+          );
+        }
       }
     });
 
@@ -76,25 +107,9 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   // Fallback: process on Vercel when the Fly worker is not configured.
-  // Videos are audio-extracted (ffmpeg-static) before Groq inside /process.
-  const origin = new URL(request.url).origin;
-  const cookie = request.headers.get("cookie") ?? "";
-
   after(async () => {
     try {
-      const processRes = await fetch(`${origin}/api/transcripts/${id}/process`, {
-        method: "POST",
-        headers: { cookie },
-        signal: AbortSignal.timeout(290_000),
-      });
-      if (!processRes.ok) {
-        const body = await processRes.text().catch(() => "");
-        console.error(
-          "[complete-upload] process failed",
-          processRes.status,
-          body.slice(0, 300),
-        );
-      }
+      await kickVercelProcess();
     } catch (err) {
       console.error(
         "[complete-upload] process kickoff error",

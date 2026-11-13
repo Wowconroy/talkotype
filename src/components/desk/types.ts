@@ -220,12 +220,12 @@ export function modeLabel(
 }
 
 export function isActiveDeskStatus(row: DeskTranscript) {
+  if (row.status === "ready" || row.status === "failed") return false;
+  // Pre-ingest link stubs must not drive perpetual desk polling.
+  if (row.job_stage === "awaiting_source") return false;
   return (
     row.status === "queued" ||
     row.status === "processing" ||
-    (row.job_stage != null &&
-      !["ready", "failed"].includes(row.job_stage) &&
-      row.status !== "ready" &&
-      row.status !== "failed")
+    (row.job_stage != null && !["ready", "failed"].includes(row.job_stage))
   );
 }
