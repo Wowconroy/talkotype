@@ -102,8 +102,16 @@ export async function GET(request: Request, { params }: Params) {
       contentType: original.content_type,
     });
 
-    // MP4/MOV keyframe seeking is inaccurate — build mono MP3 once for playback.
-    if (videoLike && (await isFfmpegAvailable())) {
+    // Never play raw MP4/MOV for click-to-seek — browsers snap to keyframes
+    // (click at 5:09 can start audio near 5:30). Always prepare mono MP3.
+    const alreadySeekable =
+      typeof original.content_type === "string" &&
+      /^(audio\/(mpeg|mp3|mp4|x-m4a|m4a|wav|x-wav|flac|ogg|opus))/.test(
+        original.content_type,
+      ) &&
+      !videoLike;
+
+    if (!alreadySeekable && (await isFfmpegAvailable())) {
       try {
         const { bytes } = await getObjectBytes(original.object_key);
         const extractedFile = await extractAudioFile({
@@ -147,8 +155,20 @@ export async function GET(request: Request, { params }: Params) {
             { prepared: true },
           );
         }
-      } catch {
-        // Fall through to original video URL.
+      } catch (err) {
+        console.error(
+          "[media-url] playback extract failed",
+          err instanceof Error ? err.message : err,
+        );
+      }
+      if (videoLike) {
+        return NextResponse.json(
+          {
+            error:
+              "Could not prepare seekable audio for this video. Try again in a moment.",
+          },
+          { status: 503 },
+        );
       }
     }
 

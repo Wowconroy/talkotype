@@ -514,22 +514,20 @@ export function TranscriptViewer({ id }: { id: string }) {
                         {para.map((seg, si) => {
                           const active = activeSeg === seg.segment_index;
                           return (
-                            <span key={`${seg.segment_index}-${si}`}>
-                              {showTimestamps && seg.start_ms != null ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void playFromSegment(seg)}
-                                  className="mr-1 inline align-baseline font-mono text-[0.78em] text-muted-foreground transition hover:text-sea"
-                                  title="Play from here"
-                                >
-                                  ({clockFromMs(seg.start_ms)})
-                                </button>
-                              ) : null}
+                            <span
+                              key={`${seg.segment_index}-${si}`}
+                              className="mr-1 inline"
+                            >
                               {si === 0 && seg.speaker_label ? (
                                 <span className="mr-1 font-semibold text-sea">
                                   {seg.speaker_label}:
                                 </span>
                               ) : null}
+                              {/*
+                                One clickable unit (timestamp + text) so the next
+                                segment's time chip cannot wrap onto this sentence
+                                and steal the click.
+                              */}
                               <button
                                 type="button"
                                 onClick={() => void playFromSegment(seg)}
@@ -543,7 +541,12 @@ export function TranscriptViewer({ id }: { id: string }) {
                                     : "Play"
                                 }
                               >
-                                {seg.text}
+                                {showTimestamps && seg.start_ms != null ? (
+                                  <span className="mr-1 whitespace-nowrap font-mono text-[0.78em] text-muted-foreground">
+                                    ({clockFromMs(seg.start_ms)})
+                                  </span>
+                                ) : null}
+                                <span>{seg.text}</span>
                               </button>{" "}
                             </span>
                           );

@@ -84,20 +84,22 @@ export function TranscriptAudioPlayer({
           ? Math.max(0, media.duration - 0.05)
           : target;
       const next = Math.max(0, Math.min(target, max));
-      if (typeof media.fastSeek === "function") {
-        try {
-          media.fastSeek(next);
-        } catch {
-          media.currentTime = next;
-        }
-      } else {
-        media.currentTime = next;
-      }
+      // Prefer currentTime over fastSeek — some engines fastSeek to keyframes.
+      media.currentTime = next;
       setCurrentMs(Math.round(next * 1000));
       void media
         .play()
         .then(() => {
-          if (seekGenRef.current === gen) setPlaying(true);
+          if (seekGenRef.current !== gen) return;
+          setPlaying(true);
+          // If the browser snapped away from the target, nudge once more.
+          window.setTimeout(() => {
+            if (seekGenRef.current !== gen) return;
+            if (pendingSeekSecRef.current == null) return;
+            if (Math.abs(media.currentTime - next) > 1.25) {
+              media.currentTime = next;
+            }
+          }, 120);
         })
         .catch(() => {
           if (seekGenRef.current !== gen) return;
