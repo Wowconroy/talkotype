@@ -1,10 +1,11 @@
 /**
  * Server-side Swift / Steady / Deep configuration.
- * Steady currently shares Turbo with Swift until FFmpeg prep/chunking is live;
- * the requested mode is still persisted so we can differentiate later.
+ * Modes are intentionally different engines + quality passes.
  */
 
 export type TranscriptionModeId = "fast" | "balanced" | "accurate";
+
+export type QualityTier = "standard" | "enhanced" | "deep";
 
 export type ModeConfig = {
   id: TranscriptionModeId;
@@ -12,7 +13,7 @@ export type ModeConfig = {
   model: string;
   provider: "whisper";
   tagline: string;
-  /** Claim status until benchmarks land. */
+  quality: QualityTier;
   accuracyClaim: "operational" | "to_benchmark";
 };
 
@@ -26,15 +27,17 @@ export const TRANSCRIPTION_MODE_CONFIG: Record<
     model: "whisper-large-v3-turbo",
     provider: "whisper",
     tagline: "Fastest turnaround",
+    quality: "standard",
     accuracyClaim: "operational",
   },
   balanced: {
     id: "balanced",
     productName: "Steady",
-    // Full Whisper + lyric/speech prompt (better coverage than Turbo on songs).
     model: "whisper-large-v3",
     provider: "whisper",
-    tagline: "Best everyday pick",
+    tagline: "Clearer everyday text",
+    // Full Whisper + second vocab pass (stronger than Swift).
+    quality: "enhanced",
     accuracyClaim: "operational",
   },
   accurate: {
@@ -42,7 +45,9 @@ export const TRANSCRIPTION_MODE_CONFIG: Record<
     productName: "Deep",
     model: "whisper-large-v3",
     provider: "whisper",
-    tagline: "Highest accuracy",
+    tagline: "Most careful pass",
+    // Full Whisper + second pass + FFmpeg gap fill.
+    quality: "deep",
     accuracyClaim: "operational",
   },
 };
@@ -51,13 +56,11 @@ export const ALLOWED_WHISPER_MODELS = new Set(
   Object.values(TRANSCRIPTION_MODE_CONFIG).map((m) => m.model),
 );
 
-export function resolveMode(
-  input?: string | null,
-): ModeConfig {
+export function resolveMode(input?: string | null): ModeConfig {
   if (input && input in TRANSCRIPTION_MODE_CONFIG) {
     return TRANSCRIPTION_MODE_CONFIG[input as TranscriptionModeId];
   }
-  return TRANSCRIPTION_MODE_CONFIG.balanced;
+  return TRANSCRIPTION_MODE_CONFIG.fast;
 }
 
 export function resolveModelForMode(
@@ -66,16 +69,13 @@ export function resolveModelForMode(
 ): { mode: ModeConfig; model: string } {
   const mode = resolveMode(modeId);
   if (explicitModel && ALLOWED_WHISPER_MODELS.has(explicitModel)) {
-    // Honor explicit model but keep requested mode id for reporting.
     return { mode, model: explicitModel };
   }
   return { mode, model: mode.model };
 }
 
-export function qualityForMode(
-  modeId?: string | null,
-): "standard" | "deep" {
-  return modeId === "accurate" || modeId === "balanced" ? "deep" : "standard";
+export function qualityForMode(modeId?: string | null): QualityTier {
+  return resolveMode(modeId).quality;
 }
 
 export function productNameForModel(model: string | null | undefined): string {

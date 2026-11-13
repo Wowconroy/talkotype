@@ -106,13 +106,13 @@ export const TRANSCRIPTION_MODES: {
   {
     id: "balanced",
     name: "Steady",
-    tagline: "Best everyday pick",
+    tagline: "Clearer everyday text",
     accent: "sea",
   },
   {
     id: "accurate",
     name: "Deep",
-    tagline: "Highest accuracy",
+    tagline: "Most careful pass",
     accent: "ink",
   },
 ];
@@ -128,11 +128,11 @@ export type TranscribeOptions = {
 
 export const DEFAULT_TRANSCRIBE_OPTIONS: TranscribeOptions = {
   language: "",
-  mode: "balanced",
+  mode: "fast",
   speakers: false,
   transcribeToEnglish: false,
   filterFillers: false,
-  preferTimestamps: true,
+  preferTimestamps: false,
 };
 
 export function formatDuration(seconds: number | null | undefined) {

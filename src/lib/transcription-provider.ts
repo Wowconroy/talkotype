@@ -42,7 +42,7 @@ export type NormalisedTranscript = {
   };
   meta?: {
     gapsFilled: number;
-    qualityPass: "standard" | "deep";
+    qualityPass: "standard" | "enhanced" | "deep";
     secondPass: boolean;
   };
 };
@@ -53,7 +53,7 @@ export type TranscribeRequest = {
   contentType?: string | null;
   model?: string | null;
   language?: string | null;
-  quality?: "standard" | "deep";
+  quality?: "standard" | "enhanced" | "deep";
 };
 
 export function isTranscriptionConfigured() {
@@ -83,7 +83,7 @@ export async function transcribeAudio(
     "whisper-large-v3-turbo";
   const quality =
     request.quality ||
-    (model === "whisper-large-v3" ? "deep" : "standard");
+    (model === "whisper-large-v3" ? "enhanced" : "standard");
 
   // Pass 1: no instructional prompt (negations cause Whisper to echo them).
   const raw1 = await transcribeWithGroq({
@@ -98,7 +98,8 @@ export async function transcribeAudio(
   let best = normaliseRaw(raw1);
   let secondPass = false;
 
-  if (quality === "deep") {
+  // Steady + Deep: second vocab-primed pass for stronger coverage.
+  if (quality === "enhanced" || quality === "deep") {
     const vocab = vocabularyPromptFromTranscript(best.text);
     if (vocab) {
       const raw2 = await transcribeWithGroq({
@@ -112,7 +113,7 @@ export async function transcribeAudio(
       });
       const pass2 = normaliseRaw(raw2);
       const picked = pickBetterPass(best, pass2);
-      secondPass = picked === pass2 || picked.text !== best.text;
+      secondPass = picked.text !== best.text;
       best = picked;
     }
   }
@@ -127,6 +128,7 @@ export async function transcribeAudio(
           segments.reduce((max, s) => Math.max(max, s.end), 0),
         );
 
+  // Deep only: fill timeline holes with FFmpeg slices.
   if (quality === "deep" && duration > 0 && (await isFfmpegAvailable())) {
     const gaps = findCoverageGaps(segments, duration, { minGapSeconds: 8 });
 

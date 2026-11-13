@@ -7,6 +7,7 @@ import {
   normalizePlan,
 } from "@/lib/plan-limits";
 import { getObjectBytes, isR2Configured } from "@/lib/r2";
+import { qualityForMode } from "@/lib/transcription-modes";
 import {
   isTranscriptionConfigured,
   transcribeAudio,
@@ -142,12 +143,9 @@ export async function POST(_request: Request, { params }: Params) {
       media.object_key.split("/").pop() ||
       "audio.mp3";
 
-    const quality =
-      job?.requested_mode === "accurate" ||
-      job?.requested_mode === "balanced" ||
-      job?.model === "whisper-large-v3"
-        ? "deep"
-        : "standard";
+    const quality = qualityForMode(
+      (job?.requested_mode as string | null | undefined) ?? null,
+    );
 
     const normalised = await transcribeAudio({
       bytes,

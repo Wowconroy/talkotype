@@ -28,17 +28,13 @@ import {
   QuotaLimitNotice,
 } from "./quota-limit-notice";
 import {
-  AUDIO_LANGUAGES,
   DEFAULT_TRANSCRIBE_OPTIONS,
-  MODE_PRODUCT_LABEL,
   MODE_TO_MODEL,
-  TRANSCRIPTION_MODES,
   type QuotaSnapshot,
   type TranscribeOptions,
-  type TranscriptionMode,
 } from "./types";
 
-const OPTIONS_STORAGE_KEY = "talkotype.transcribeOptions";
+const OPTIONS_STORAGE_KEY = "talkotype.transcribeOptions.v3";
 
 type Props = {
   open: boolean;
@@ -136,19 +132,6 @@ function saveOptions(options: TranscribeOptions) {
   }
 }
 
-function languageLabel(value: string) {
-  return (
-    AUDIO_LANGUAGES.find((lang) => lang.value === value)?.label ?? "Auto-detect"
-  );
-}
-
-function modeLabel(mode: TranscriptionMode) {
-  return (
-    TRANSCRIPTION_MODES.find((item) => item.id === mode)?.name ??
-    MODE_PRODUCT_LABEL[mode]
-  );
-}
-
 export function TranscribeModal({
   open,
   onClose,
@@ -162,9 +145,7 @@ export function TranscribeModal({
   const [options, setOptions] = useState<TranscribeOptions>(
     DEFAULT_TRANSCRIBE_OPTIONS,
   );
-  const [optionsOpen, setOptionsOpen] = useState(false);
-  const [touchedLanguage, setTouchedLanguage] = useState(false);
-  const [touchedMode, setTouchedMode] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -181,9 +162,7 @@ export function TranscribeModal({
       setUploads([]);
       setPendingPick(null);
       setBusy(false);
-      setOptionsOpen(false);
-      setTouchedLanguage(false);
-      setTouchedMode(false);
+      setMoreOpen(false);
       setDragging(false);
       return;
     }
@@ -202,11 +181,6 @@ export function TranscribeModal({
   const uploadCap = maxUploadBytes(plan);
   const freeMinutes = Math.round(FREE_TRANSCRIBE_SECONDS / 60);
   const maxHours = Math.round(maxFileSeconds("unlimited") / 3600);
-  const extrasOn =
-    Number(options.speakers) +
-    Number(options.transcribeToEnglish) +
-    Number(options.filterFillers) +
-    Number(options.preferTimestamps);
 
   function patchUpload(id: string, patch: Partial<UploadItem>) {
     setUploads((prev) =>
@@ -214,31 +188,8 @@ export function TranscribeModal({
     );
   }
 
-  function maybeCloseOptions(next: {
-    language?: boolean;
-    mode?: boolean;
-  }) {
-    const languageDone = next.language ?? touchedLanguage;
-    const modeDone = next.mode ?? touchedMode;
-    if (languageDone && modeDone) {
-      setOptionsOpen(false);
-      setTouchedLanguage(false);
-      setTouchedMode(false);
-    }
-  }
-
-  function openOptionsPanel() {
-    setTouchedLanguage(false);
-    setTouchedMode(false);
-    setOptionsOpen(true);
-  }
-
   function openFilePicker() {
     if (busy || blocked) return;
-    if (optionsOpen) {
-      setError("Finish choosing language and mode first, then add files.");
-      return;
-    }
     inputRef.current?.click();
   }
 
@@ -349,11 +300,6 @@ export function TranscribeModal({
     // Copy immediately — clearing <input value> empties a live FileList.
     const all = Array.from(fileList);
     if (all.length === 0) return;
-
-    if (optionsOpen) {
-      setError("Finish choosing language and mode first, then add files.");
-      return;
-    }
 
     const decision = selectUploadBatch(
       plan,
@@ -599,98 +545,74 @@ export function TranscribeModal({
               </p>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-border/80 bg-mist/40 px-3.5 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    Selected options
-                  </p>
-                  <p className="mt-1 truncate text-sm text-ink">
-                    {languageLabel(options.language)} · {modeLabel(options.mode)}
-                    {extrasOn > 0 ? ` · ${extrasOn} extra` : ""}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    optionsOpen ? setOptionsOpen(false) : openOptionsPanel()
-                  }
-                  className="shrink-0 text-sm font-semibold text-coral hover:underline disabled:opacity-60"
-                >
-                  {optionsOpen ? "Hide options" : "Change options"}
-                </button>
-              </div>
-
-              {optionsOpen ? (
-                <div className="mt-3 space-y-4 border-t border-border/70 pt-3">
-                  <LanguageSelect
-                    value={options.language}
-                    disabled={busy}
-                    onChange={(language) => {
-                      setOptions((o) => ({ ...o, language }));
-                      setTouchedLanguage(true);
-                      maybeCloseOptions({ language: true });
-                    }}
-                  />
-                  <ModePicker
-                    value={options.mode}
-                    disabled={busy}
-                    onChange={(mode) => {
-                      setOptions((o) => ({ ...o, mode }));
-                      setTouchedMode(true);
-                      maybeCloseOptions({ mode: true });
-                    }}
-                  />
-                  <div className="space-y-2.5 rounded-2xl border border-border/70 bg-white p-3.5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      More settings
-                    </p>
-                    <Toggle
-                      label="Recognize speakers"
-                      hint={
-                        isUnlimited
-                          ? "Labels who spoke when"
-                          : "Requires Unlimited plan"
-                      }
-                      checked={options.speakers}
-                      disabled={!isUnlimited}
-                      onChange={(speakers) =>
-                        setOptions((o) => ({ ...o, speakers }))
-                      }
-                    />
-                    <Toggle
-                      label="Transcribe to English"
-                      hint="Forces English output language"
-                      checked={options.transcribeToEnglish}
-                      onChange={(transcribeToEnglish) =>
-                        setOptions((o) => ({ ...o, transcribeToEnglish }))
-                      }
-                    />
-                    <Toggle
-                      label="Filter filler words"
-                      hint="Stored as a preference; applied when supported"
-                      checked={options.filterFillers}
-                      onChange={(filterFillers) =>
-                        setOptions((o) => ({ ...o, filterFillers }))
-                      }
-                    />
-                    <Toggle
-                      label="Prefer timestamps"
-                      hint="Keep timed segments for editor and exports"
-                      checked={options.preferTimestamps}
-                      onChange={(preferTimestamps) =>
-                        setOptions((o) => ({ ...o, preferTimestamps }))
-                      }
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Choose language and mode to return to the upload form.
-                    Transcription still starts when you add files.
-                  </p>
-                </div>
-              ) : null}
+            <div className="mt-5 space-y-4">
+              <LanguageSelect
+                value={options.language}
+                disabled={busy}
+                onChange={(language) =>
+                  setOptions((o) => ({ ...o, language }))
+                }
+              />
+              <ModePicker
+                value={options.mode}
+                disabled={busy}
+                onChange={(mode) => setOptions((o) => ({ ...o, mode }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Swift is quick. Steady uses a stronger model. Deep adds a careful
+                second pass and fills skipped gaps when possible.
+              </p>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setMoreOpen((v) => !v)}
+              className="mt-4 text-sm font-semibold text-coral hover:underline"
+            >
+              {moreOpen ? "Hide more settings" : "Speaker recognition & more settings"}
+            </button>
+
+            {moreOpen ? (
+              <div className="mt-3 space-y-2.5 rounded-2xl border border-border/70 bg-mist/50 p-3.5">
+                <Toggle
+                  label="Recognize speakers"
+                  hint={
+                    isUnlimited
+                      ? "Labels who spoke when"
+                      : "Requires Unlimited plan"
+                  }
+                  checked={options.speakers}
+                  disabled={!isUnlimited}
+                  onChange={(speakers) =>
+                    setOptions((o) => ({ ...o, speakers }))
+                  }
+                />
+                <Toggle
+                  label="Transcribe to English"
+                  hint="Forces English output language"
+                  checked={options.transcribeToEnglish}
+                  onChange={(transcribeToEnglish) =>
+                    setOptions((o) => ({ ...o, transcribeToEnglish }))
+                  }
+                />
+                <Toggle
+                  label="Filter filler words"
+                  hint="Stored as a preference; applied when supported"
+                  checked={options.filterFillers}
+                  onChange={(filterFillers) =>
+                    setOptions((o) => ({ ...o, filterFillers }))
+                  }
+                />
+                <Toggle
+                  label="Prefer timestamps"
+                  hint="Show timed segments in the editor and exports"
+                  checked={options.preferTimestamps}
+                  onChange={(preferTimestamps) =>
+                    setOptions((o) => ({ ...o, preferTimestamps }))
+                  }
+                />
+              </div>
+            ) : null}
 
             {pendingPick ? (
               <div className="mt-4 rounded-2xl border border-border bg-mist/60 p-3.5">
