@@ -7,6 +7,7 @@ export type ExportSegment = {
   start_ms?: number | null;
   end_ms?: number | null;
   text: string;
+  speaker?: string | null;
 };
 
 export type ExportInput = {
@@ -47,6 +48,7 @@ function segmentsOrParagraphs(input: ExportInput): ExportSegment[] {
       start_ms: s.start_ms ?? null,
       end_ms: s.end_ms ?? null,
       text: s.text.trim(),
+      speaker: s.speaker ?? null,
     })).filter((s) => s.text);
   }
   const paras = paragraphs(input.text);
@@ -87,28 +89,38 @@ function formatClock(ms: number) {
   return `${m}:${pad2(s)}`;
 }
 
+function formatSegmentLine(
+  s: ExportSegment,
+  options?: { stamp?: boolean },
+) {
+  const stamp =
+    options?.stamp && s.start_ms != null ? `[${formatClock(s.start_ms)}] ` : "";
+  const speaker = s.speaker ? `${s.speaker}: ` : "";
+  return `${stamp}${speaker}${s.text}`;
+}
+
 export function buildTxt(input: ExportInput) {
   const segs = segmentsOrParagraphs(input);
-  if (!input.includeTimestamps) {
+  const hasSpeakers = segs.some((s) => s.speaker);
+  if (!input.includeTimestamps && !hasSpeakers) {
     return input.text || segs.map((s) => s.text).join("\n\n");
   }
   return segs
-    .map((s) => {
-      const stamp =
-        s.start_ms != null ? `[${formatClock(s.start_ms)}] ` : "";
-      return `${stamp}${s.text}`;
-    })
+    .map((s) =>
+      formatSegmentLine(s, { stamp: Boolean(input.includeTimestamps) }),
+    )
     .join("\n\n");
 }
 
 export function buildCsv(input: ExportInput) {
   const segs = segmentsOrParagraphs(input);
-  const rows = [["index", "start", "end", "text"]];
+  const rows = [["index", "start", "end", "speaker", "text"]];
   segs.forEach((s, i) => {
     rows.push([
       String(i + 1),
       s.start_ms != null ? formatClock(s.start_ms) : "",
       s.end_ms != null ? formatClock(s.end_ms) : "",
+      s.speaker ? `"${s.speaker.replace(/"/g, '""')}"` : "",
       `"${s.text.replace(/"/g, '""')}"`,
     ]);
   });
@@ -121,7 +133,8 @@ export function buildSrt(input: ExportInput) {
     .map((s, i) => {
       const start = formatSrtTime(s.start_ms ?? i * 5000);
       const end = formatSrtTime(s.end_ms ?? i * 5000 + 4500);
-      return `${i + 1}\n${start} --> ${end}\n${s.text}\n`;
+      const body = s.speaker ? `${s.speaker}: ${s.text}` : s.text;
+      return `${i + 1}\n${start} --> ${end}\n${body}\n`;
     })
     .join("\n");
 }
@@ -132,7 +145,8 @@ export function buildVtt(input: ExportInput) {
     .map((s, i) => {
       const start = formatVttTime(s.start_ms ?? i * 5000);
       const end = formatVttTime(s.end_ms ?? i * 5000 + 4500);
-      return `${start} --> ${end}\n${s.text}\n`;
+      const line = s.speaker ? `${s.speaker}: ${s.text}` : s.text;
+      return `${start} --> ${end}\n${line}\n`;
     })
     .join("\n");
   return `WEBVTT\n\n${body}`;

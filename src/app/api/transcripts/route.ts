@@ -65,6 +65,7 @@ type JobInsert = {
   stage: string;
   progress_pct: number;
   speakers_requested: boolean;
+  speakers_expected?: number | null;
   attempt_count: number;
   request_key: string;
   source_content_revision: number;
@@ -82,15 +83,22 @@ async function insertTranscriptionJob(
     .single();
   if (!full.error) return full;
 
-  // Migration 20261113180000 may not be applied yet — retry without new cols.
+  // Newer columns may not be applied yet — retry without them.
   const {
     requested_mode: _m,
     filter_fillers: _f,
     prefer_timestamps: _p,
     transcribe_to_english: _e,
+    speakers_expected: _s,
     ...legacy
   } = row;
   return admin.from("transcription_jobs").insert(legacy).select("*").single();
+}
+
+function normalizeSpeakerCount(value: unknown): number | null {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(10, Math.max(2, Math.round(n)));
 }
 
 export async function GET() {
@@ -192,6 +200,7 @@ export async function POST(request: Request) {
     title?: string;
     requestKey?: string;
     speakers?: boolean;
+    speakerCount?: number;
     folderId?: string | null;
     transcriptionModel?: string;
     transcriptionMode?: string;
@@ -260,6 +269,9 @@ export async function POST(request: Request) {
   const plan = normalizePlan(profile?.plan);
   const isUnlimited = plan === "unlimited";
   const speakersRequested = wantSpeakers && isUnlimited;
+  const speakersExpected = speakersRequested
+    ? (normalizeSpeakerCount(body.speakerCount) ?? 2)
+    : null;
 
   if (!isLinkImport && filename) {
     const validated = validateUploadCandidate(plan, {
@@ -407,6 +419,7 @@ export async function POST(request: Request) {
       stage: "awaiting_source",
       progress_pct: 0,
       speakers_requested: speakersRequested,
+      speakers_expected: speakersExpected,
       attempt_count: 0,
       request_key: requestKey,
       source_content_revision: transcript.content_revision ?? 0,
@@ -481,6 +494,7 @@ export async function POST(request: Request) {
     stage: "queued",
     progress_pct: 0,
     speakers_requested: speakersRequested,
+    speakers_expected: speakersExpected,
     attempt_count: 0,
     request_key: requestKey,
     source_content_revision: transcript.content_revision ?? 0,

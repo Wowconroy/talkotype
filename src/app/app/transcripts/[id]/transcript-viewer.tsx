@@ -25,11 +25,19 @@ type Segment = {
   start_ms: number | null;
   end_ms: number | null;
   text: string;
+  speaker_id?: string | null;
+};
+
+type Speaker = {
+  id: string;
+  speaker_index: number;
+  label: string;
 };
 
 type TranscriptDetail = DeskTranscript & {
   transcript_text: string | null;
   segments?: Segment[];
+  speakers?: Speaker[];
   media_assets?: { size_bytes?: number | null; kind?: string }[];
 };
 
@@ -127,6 +135,14 @@ export function TranscriptViewer({ id }: { id: string }) {
       }
     : null;
 
+  const speakerLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const sp of row?.speakers ?? []) {
+      map.set(sp.id, sp.label);
+    }
+    return map;
+  }, [row?.speakers]);
+
   const renderedBody = useMemo(() => {
     const segments = row?.segments ?? [];
     if (segments.length > 0) {
@@ -137,6 +153,7 @@ export function TranscriptViewer({ id }: { id: string }) {
           if (/^дякую за перегляд!?$/i.test(t)) return false;
           if (/^thanks for watching!?$/i.test(t)) return false;
           if (/^(музика|звучить музика)$/i.test(t)) return false;
+          if (/^(?:[oо]\.?|[.,;:!?…]+)$/iu.test(t)) return false;
           return true;
         })
         .map((seg) => {
@@ -144,13 +161,17 @@ export function TranscriptViewer({ id }: { id: string }) {
             showTimestamps && seg.start_ms != null
               ? `(${clock(seg.start_ms)}) `
               : "";
-          return `${stamp}${seg.text}`.trim();
+          const speaker =
+            seg.speaker_id && speakerLabelById.get(seg.speaker_id)
+              ? `${speakerLabelById.get(seg.speaker_id)}: `
+              : "";
+          return `${stamp}${speaker}${seg.text}`.trim();
         });
     }
     const plain = text.trim();
     if (!plain) return [] as string[];
     return plain.split(/\n+/).filter(Boolean);
-  }, [row?.segments, showTimestamps, text]);
+  }, [row?.segments, showTimestamps, speakerLabelById, text]);
 
   async function saveEdits() {
     if (!row) return;

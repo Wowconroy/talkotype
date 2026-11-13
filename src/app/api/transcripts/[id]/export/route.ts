@@ -75,11 +75,21 @@ export async function GET(request: Request, { params }: Params) {
     );
   }
 
-  const { data: segments } = await admin
-    .from("transcript_segments")
-    .select("segment_index, start_ms, end_ms, text")
-    .eq("transcript_id", id)
-    .order("segment_index", { ascending: true });
+  const [{ data: segments }, { data: speakers }] = await Promise.all([
+    admin
+      .from("transcript_segments")
+      .select("segment_index, start_ms, end_ms, text, speaker_id")
+      .eq("transcript_id", id)
+      .order("segment_index", { ascending: true }),
+    admin
+      .from("transcript_speakers")
+      .select("id, label")
+      .eq("transcript_id", id),
+  ]);
+
+  const labelById = new Map(
+    (speakers ?? []).map((s) => [s.id as string, s.label as string]),
+  );
 
   const input = {
     title: data.title || "Transcript",
@@ -88,6 +98,9 @@ export async function GET(request: Request, { params }: Params) {
       start_ms: s.start_ms as number | null,
       end_ms: s.end_ms as number | null,
       text: (s.text as string) || "",
+      speaker: s.speaker_id
+        ? (labelById.get(s.speaker_id as string) ?? null)
+        : null,
     })),
     includeTimestamps,
   };

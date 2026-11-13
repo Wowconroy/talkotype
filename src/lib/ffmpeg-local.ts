@@ -62,7 +62,7 @@ function safeName(filename: string) {
 
 /**
  * Full-file extract to mono 16 kHz MP3 (small + Groq-friendly).
- * Prefer MP3 over FLAC so 20–30 min videos stay well under provider limits.
+ * 128 kbps keeps quiet speech clearer than 64 kbps while staying under limits.
  */
 export async function extractAudioFile(params: {
   sourceBytes: Uint8Array;
@@ -95,7 +95,7 @@ export async function extractAudioFile(params: {
       "-c:a",
       "libmp3lame",
       "-b:a",
-      "64k",
+      "128k",
     ];
     if (params.maxSeconds && params.maxSeconds > 0) {
       args.push("-t", String(params.maxSeconds));

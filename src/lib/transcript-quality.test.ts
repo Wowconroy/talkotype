@@ -14,6 +14,9 @@ describe("transcript quality", () => {
     assert.equal(isHallucinatedSegment("Дякую за перегляд!"), true);
     assert.equal(isHallucinatedSegment("Thanks for watching"), true);
     assert.equal(isHallucinatedSegment("Музика"), true);
+    assert.equal(isHallucinatedSegment("o."), true);
+    assert.equal(isHallucinatedSegment("."), true);
+    assert.equal(isHallucinatedSegment("And let's start"), false);
     assert.equal(isHallucinatedSegment("Хто кабачок"), false);
   });
 

@@ -28,16 +28,24 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const { data: segments } = await admin
-    .from("transcript_segments")
-    .select("segment_index, start_ms, end_ms, text")
-    .eq("transcript_id", id)
-    .order("segment_index", { ascending: true });
+  const [{ data: segments }, { data: speakers }] = await Promise.all([
+    admin
+      .from("transcript_segments")
+      .select("segment_index, start_ms, end_ms, text, speaker_id")
+      .eq("transcript_id", id)
+      .order("segment_index", { ascending: true }),
+    admin
+      .from("transcript_speakers")
+      .select("id, speaker_index, label")
+      .eq("transcript_id", id)
+      .order("speaker_index", { ascending: true }),
+  ]);
 
   return NextResponse.json({
     transcript: {
       ...data,
       segments: segments ?? [],
+      speakers: speakers ?? [],
     },
   });
 }

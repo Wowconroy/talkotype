@@ -46,7 +46,7 @@ export const TRANSCRIPTION_MODE_CONFIG: Record<
     model: "whisper-large-v3",
     provider: "whisper",
     tagline: "Most careful pass",
-    // Full Whisper + second pass + FFmpeg gap fill.
+    // Full Whisper + second pass + aggressive FFmpeg gap fill.
     quality: "deep",
     accuracyClaim: "operational",
   },

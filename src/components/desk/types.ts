@@ -122,6 +122,8 @@ export type TranscribeOptions = {
   language: string;
   mode: TranscriptionMode;
   speakers: boolean;
+  /** Exact count for AssemblyAI when speakers is on (Unlimited). */
+  speakerCount: number;
   transcribeToEnglish: boolean;
   filterFillers: boolean;
   preferTimestamps: boolean;
@@ -129,12 +131,20 @@ export type TranscribeOptions = {
 
 export const DEFAULT_TRANSCRIBE_OPTIONS: TranscribeOptions = {
   language: "en",
-  mode: "fast",
+  // Steady (large-v3) avoids Swift/turbo skips and spelling glitches on quiet speech.
+  mode: "balanced",
   speakers: false,
+  speakerCount: 2,
   transcribeToEnglish: false,
   filterFillers: false,
   preferTimestamps: false,
 };
+
+export function normalizeSpeakerCount(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return 2;
+  return Math.min(10, Math.max(2, Math.round(n)));
+}
 
 export function formatDuration(seconds: number | null | undefined) {
   if (seconds == null || Number.isNaN(seconds)) return "—";

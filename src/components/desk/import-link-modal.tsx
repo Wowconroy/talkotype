@@ -8,9 +8,11 @@ import {
   isQuotaLimitError,
   QuotaLimitNotice,
 } from "./quota-limit-notice";
+import { TranscribeMoreSettings } from "./transcribe-more-settings";
 import {
   DEFAULT_TRANSCRIBE_OPTIONS,
   MODE_TO_MODEL,
+  normalizeSpeakerCount,
   type QuotaSnapshot,
   type TranscribeOptions,
 } from "./types";
@@ -77,7 +79,11 @@ export function ImportLinkModal({
           requestedLanguage: language,
           transcriptionMode: options.mode,
           transcriptionModel: MODE_TO_MODEL[options.mode],
-          speakers: options.speakers,
+          speakers: isUnlimited && options.speakers,
+          speakerCount:
+            isUnlimited && options.speakers
+              ? normalizeSpeakerCount(options.speakerCount)
+              : undefined,
           folderId,
           filterFillers: options.filterFillers,
           preferTimestamps: options.preferTimestamps,
@@ -181,49 +187,14 @@ export function ImportLinkModal({
               />
             </div>
 
-            <button
-              type="button"
-              onClick={() => setMoreOpen((v) => !v)}
-              className="mt-4 text-sm font-semibold text-coral hover:underline"
-            >
-              {moreOpen ? "Hide" : "Speaker recognition & more settings"}
-            </button>
-
-            {moreOpen ? (
-              <div className="mt-3 space-y-2.5 rounded-2xl border border-border/70 bg-mist/50 p-3.5">
-                <Toggle
-                  label="Recognize speakers"
-                  hint={isUnlimited ? undefined : "Unlimited plan only"}
-                  checked={options.speakers}
-                  disabled={!isUnlimited}
-                  onChange={(speakers) =>
-                    setOptions((o) => ({ ...o, speakers }))
-                  }
-                />
-                <Toggle
-                  label="Transcribe to English"
-                  checked={options.transcribeToEnglish}
-                  onChange={(transcribeToEnglish) =>
-                    setOptions((o) => ({ ...o, transcribeToEnglish }))
-                  }
-                />
-                <Toggle
-                  label="Filter filler words"
-                  hint="Applied when processing supports it"
-                  checked={options.filterFillers}
-                  onChange={(filterFillers) =>
-                    setOptions((o) => ({ ...o, filterFillers }))
-                  }
-                />
-                <Toggle
-                  label="Prefer timestamps"
-                  checked={options.preferTimestamps}
-                  onChange={(preferTimestamps) =>
-                    setOptions((o) => ({ ...o, preferTimestamps }))
-                  }
-                />
-              </div>
-            ) : null}
+            <TranscribeMoreSettings
+              options={options}
+              onChange={setOptions}
+              isUnlimited={isUnlimited}
+              moreOpen={moreOpen}
+              onToggleMore={() => setMoreOpen((v) => !v)}
+              disabled={busy}
+            />
 
             {error ? (
               <p className="mt-4 rounded-xl bg-coral-soft px-3 py-2 text-sm text-coral">
@@ -257,41 +228,6 @@ export function ImportLinkModal({
   );
 }
 
-function Toggle({
-  label,
-  hint,
-  checked,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <label
-      className={`flex cursor-pointer items-start justify-between gap-3 ${
-        disabled ? "cursor-not-allowed opacity-55" : ""
-      }`}
-    >
-      <span>
-        <span className="block text-sm font-medium text-ink">{label}</span>
-        {hint ? (
-          <span className="block text-xs text-muted-foreground">{hint}</span>
-        ) : null}
-      </span>
-      <input
-        type="checkbox"
-        className="mt-1 size-4 accent-coral"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-    </label>
-  );
-}
 
 function deriveTitle(url: string) {
   try {

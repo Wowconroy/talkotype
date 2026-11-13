@@ -27,14 +27,16 @@ import {
   isQuotaLimitError,
   QuotaLimitNotice,
 } from "./quota-limit-notice";
+import { TranscribeMoreSettings } from "./transcribe-more-settings";
 import {
   DEFAULT_TRANSCRIBE_OPTIONS,
   MODE_TO_MODEL,
+  normalizeSpeakerCount,
   type QuotaSnapshot,
   type TranscribeOptions,
 } from "./types";
 
-const OPTIONS_STORAGE_KEY = "talkotype.transcribeOptions.v4";
+const OPTIONS_STORAGE_KEY = "talkotype.transcribeOptions.v5";
 
 type Props = {
   open: boolean;
@@ -118,7 +120,13 @@ function loadSavedOptions(): TranscribeOptions {
     const raw = window.localStorage.getItem(OPTIONS_STORAGE_KEY);
     if (!raw) return DEFAULT_TRANSCRIBE_OPTIONS;
     const parsed = JSON.parse(raw) as Partial<TranscribeOptions>;
-    return { ...DEFAULT_TRANSCRIBE_OPTIONS, ...parsed };
+    return {
+      ...DEFAULT_TRANSCRIBE_OPTIONS,
+      ...parsed,
+      speakerCount: normalizeSpeakerCount(
+        parsed.speakerCount ?? DEFAULT_TRANSCRIBE_OPTIONS.speakerCount,
+      ),
+    };
   } catch {
     return DEFAULT_TRANSCRIBE_OPTIONS;
   }
@@ -166,8 +174,12 @@ export function TranscribeModal({
       setDragging(false);
       return;
     }
-    setOptions(loadSavedOptions());
-  }, [open]);
+    const saved = loadSavedOptions();
+    // Free plan never keeps speakers on (menu is locked).
+    setOptions(
+      isUnlimited ? saved : { ...saved, speakers: false },
+    );
+  }, [open, isUnlimited]);
 
   useEffect(() => {
     if (!open) return;
@@ -227,7 +239,11 @@ export function TranscribeModal({
           requestedLanguage: language,
           transcriptionMode: options.mode,
           transcriptionModel: MODE_TO_MODEL[options.mode],
-          speakers: options.speakers,
+          speakers: isUnlimited && options.speakers,
+          speakerCount:
+            isUnlimited && options.speakers
+              ? normalizeSpeakerCount(options.speakerCount)
+              : undefined,
           folderId,
           filterFillers: options.filterFillers,
           preferTimestamps: options.preferTimestamps,
@@ -559,60 +575,20 @@ export function TranscribeModal({
                 onChange={(mode) => setOptions((o) => ({ ...o, mode }))}
               />
               <p className="text-xs text-muted-foreground">
-                Swift is quick. Steady uses a stronger model. Deep adds a careful
-                second pass and fills skipped gaps when possible.
+                Swift is quickest. Steady (default) uses the stronger model for
+                clearer words. Deep adds a second pass and fills more skipped
+                gaps.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setMoreOpen((v) => !v)}
-              className="mt-4 text-sm font-semibold text-coral hover:underline"
-            >
-              {moreOpen ? "Hide more settings" : "Speaker recognition & more settings"}
-            </button>
-
-            {moreOpen ? (
-              <div className="mt-3 space-y-2.5 rounded-2xl border border-border/70 bg-mist/50 p-3.5">
-                <Toggle
-                  label="Recognize speakers"
-                  hint={
-                    isUnlimited
-                      ? "Labels who spoke when"
-                      : "Requires Unlimited plan"
-                  }
-                  checked={options.speakers}
-                  disabled={!isUnlimited}
-                  onChange={(speakers) =>
-                    setOptions((o) => ({ ...o, speakers }))
-                  }
-                />
-                <Toggle
-                  label="Transcribe to English"
-                  hint="Forces English output language"
-                  checked={options.transcribeToEnglish}
-                  onChange={(transcribeToEnglish) =>
-                    setOptions((o) => ({ ...o, transcribeToEnglish }))
-                  }
-                />
-                <Toggle
-                  label="Filter filler words"
-                  hint="Stored as a preference; applied when supported"
-                  checked={options.filterFillers}
-                  onChange={(filterFillers) =>
-                    setOptions((o) => ({ ...o, filterFillers }))
-                  }
-                />
-                <Toggle
-                  label="Prefer timestamps"
-                  hint="Show timed segments in the editor and exports"
-                  checked={options.preferTimestamps}
-                  onChange={(preferTimestamps) =>
-                    setOptions((o) => ({ ...o, preferTimestamps }))
-                  }
-                />
-              </div>
-            ) : null}
+            <TranscribeMoreSettings
+              options={options}
+              onChange={setOptions}
+              isUnlimited={isUnlimited}
+              moreOpen={moreOpen}
+              onToggleMore={() => setMoreOpen((v) => !v)}
+              disabled={busy}
+            />
 
             {pendingPick ? (
               <div className="mt-4 rounded-2xl border border-border bg-mist/60 p-3.5">
@@ -714,38 +690,3 @@ export function TranscribeModal({
   );
 }
 
-function Toggle({
-  label,
-  hint,
-  checked,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <label
-      className={`flex cursor-pointer items-start justify-between gap-3 ${
-        disabled ? "cursor-not-allowed opacity-55" : ""
-      }`}
-    >
-      <span>
-        <span className="block text-sm font-medium text-ink">{label}</span>
-        {hint ? (
-          <span className="block text-xs text-muted-foreground">{hint}</span>
-        ) : null}
-      </span>
-      <input
-        type="checkbox"
-        className="mt-1 size-4 accent-coral"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-    </label>
-  );
-}

@@ -20,10 +20,18 @@ const HALLUCINATION_PATTERNS: RegExp[] = [
 const NON_SPEECH_ONLY =
   /^(музика|music|звучить музика|\[music\]|\(music\)|♪+|instrumental)+[.!?]*$/i;
 
+/**
+ * Tiny Whisper ghosts that are not real words (e.g. lone "o." / ".").
+ * Keep real fillers like "uh" / "um" unless the user enables filler filtering.
+ */
+const JUNK_ONLY =
+  /^(?:[oо]\.?|[.,;:!?…]+|…+)$/iu;
+
 export function isHallucinatedSegment(text: string) {
   const t = text.trim();
   if (!t) return true;
   if (NON_SPEECH_ONLY.test(t)) return true;
+  if (JUNK_ONLY.test(t)) return true;
   return HALLUCINATION_PATTERNS.some((re) => re.test(t));
 }
 

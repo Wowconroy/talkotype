@@ -14,6 +14,7 @@ import {
 } from "@/lib/plan-limits";
 import { getObjectBytes, isR2Configured } from "@/lib/r2";
 import { qualityForMode } from "@/lib/transcription-modes";
+import { isAssemblyAIConfigured } from "@/lib/assemblyai";
 import {
   isTranscriptionConfigured,
   transcribeAudio,
@@ -71,9 +72,15 @@ export async function POST(_request: Request, { params }: Params) {
     .eq("id", transcript.active_job_id)
     .maybeSingle();
 
+  const speakersRequested = Boolean(job?.speakers_requested);
+  const speakersExpected =
+    typeof job?.speakers_expected === "number" ? job.speakers_expected : null;
   const provider =
     job?.provider || process.env.TRANSCRIPTION_PROVIDER || "whisper";
-  const useAssembly = provider === "assemblyai";
+  // Whisper stays default; AssemblyAI only when speakers are on (or legacy override).
+  const useAssembly =
+    provider === "assemblyai" ||
+    (speakersRequested && isAssemblyAIConfigured());
 
   if (!isR2Configured()) {
     await admin.rpc("publish_job_transcript", {
@@ -86,6 +93,23 @@ export async function POST(_request: Request, { params }: Params) {
     });
     return NextResponse.json(
       { ok: false, error: "R2 is not configured." },
+      { status: 503 },
+    );
+  }
+
+  if (speakersRequested && !isAssemblyAIConfigured()) {
+    await admin.rpc("publish_job_transcript", {
+      p_job_id: transcript.active_job_id,
+      p_transcript_text: "",
+      p_error_code: "assemblyai_not_configured",
+      p_mark_failed: true,
+    });
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Speaker labels need ASSEMBLYAI_API_KEY. Add the key or turn off Recognize speakers.",
+      },
       { status: 503 },
     );
   }
@@ -123,17 +147,6 @@ export async function POST(_request: Request, { params }: Params) {
     .eq("id", id);
 
   try {
-    if (useAssembly) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "AssemblyAI path needs async polling. Use Whisper (default) for now.",
-        },
-        { status: 501 },
-      );
-    }
-
     const { bytes, contentType } = await getObjectBytes(media.object_key);
 
     const filename =
@@ -208,7 +221,7 @@ export async function POST(_request: Request, { params }: Params) {
       .from("transcription_jobs")
       .update({
         progress_pct: 35,
-        stage: "transcribing",
+        stage: speakersRequested ? "diarizing" : "transcribing",
         updated_at: new Date().toISOString(),
       })
       .eq("id", transcript.active_job_id);
@@ -224,6 +237,9 @@ export async function POST(_request: Request, { params }: Params) {
       model: job?.model,
       language: transcript.requested_language,
       quality,
+      speakers: speakersRequested,
+      speakersExpected,
+      assemblyai: provider === "assemblyai",
     });
 
     const rawResult = {
@@ -243,15 +259,33 @@ export async function POST(_request: Request, { params }: Params) {
       .update({
         progress_pct: 85,
         stage: "publishing",
+        provider: normalised.provider,
+        model: normalised.model,
         updated_at: new Date().toISOString(),
       })
       .eq("id", transcript.active_job_id);
 
-    // Replace segments when Groq returns timed chunks.
-    await admin
-      .from("transcript_segments")
-      .delete()
-      .eq("transcript_id", id);
+    // Replace speakers + segments for this transcript revision.
+    await admin.from("transcript_segments").delete().eq("transcript_id", id);
+    await admin.from("transcript_speakers").delete().eq("transcript_id", id);
+
+    const speakerIdByLabel = new Map<string, string>();
+    if (normalised.speakers && normalised.speakers.length > 0) {
+      const rows = normalised.speakers.map((sp, index) => ({
+        transcript_id: id,
+        user_id: user.id,
+        speaker_index: index,
+        label: sp.label,
+      }));
+      const { data: insertedSpeakers, error: speakerErr } = await admin
+        .from("transcript_speakers")
+        .insert(rows)
+        .select("id, label");
+      if (speakerErr) throw new Error(speakerErr.message);
+      for (const row of insertedSpeakers ?? []) {
+        speakerIdByLabel.set(row.label as string, row.id as string);
+      }
+    }
 
     if (result.segments && result.segments.length > 0) {
       await admin.from("transcript_segments").insert(
@@ -263,6 +297,9 @@ export async function POST(_request: Request, { params }: Params) {
           start_ms: Math.max(0, Math.round(seg.start * 1000)),
           end_ms: Math.max(0, Math.round(seg.end * 1000)),
           text: seg.text,
+          speaker_id: seg.speaker
+            ? (speakerIdByLabel.get(seg.speaker) ?? null)
+            : null,
         })),
       );
     }

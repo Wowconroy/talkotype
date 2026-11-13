@@ -1,5 +1,9 @@
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import {
+  isAssemblyAIConfigured,
+  transcribeWithSpeakers,
+} from "./assemblyai.js";
 import { admin, downloadObject, uploadObject } from "./clients.js";
 import { config } from "./config.js";
 import {
@@ -149,6 +153,99 @@ export async function processTranscript(transcriptId: string) {
       status: "active",
     });
 
+    // Speaker labels: AssemblyAI diarization on the full extracted audio.
+    if (job.speakers_requested) {
+      if (!isAssemblyAIConfigured()) {
+        return failJob(sb, job as JobRow, "assemblyai_not_configured");
+      }
+      await updateJob(sb, job.id, {
+        stage: "diarizing",
+        progress_pct: 40,
+        provider: "assemblyai",
+        model: "universal-2",
+      });
+      const diarized = await transcribeWithSpeakers({
+        bytes: audioBytes,
+        language: transcript.requested_language,
+        speakersExpected:
+          typeof job.speakers_expected === "number"
+            ? job.speakers_expected
+            : null,
+      });
+
+      await updateJob(sb, job.id, {
+        stage: "publishing",
+        progress_pct: 90,
+      });
+
+      await sb.from("transcript_segments").delete().eq("transcript_id", transcriptId);
+      await sb.from("transcript_speakers").delete().eq("transcript_id", transcriptId);
+
+      const speakerIdByLabel = new Map<string, string>();
+      if (diarized.speakers.length > 0) {
+        const { data: insertedSpeakers, error: speakerErr } = await sb
+          .from("transcript_speakers")
+          .insert(
+            diarized.speakers.map((sp, index) => ({
+              transcript_id: transcriptId,
+              user_id: transcript.user_id,
+              speaker_index: index,
+              label: sp.label,
+            })),
+          )
+          .select("id, label");
+        if (speakerErr) throw new Error(speakerErr.message);
+        for (const row of insertedSpeakers ?? []) {
+          speakerIdByLabel.set(row.label as string, row.id as string);
+        }
+      }
+
+      if (diarized.segments.length > 0) {
+        await sb.from("transcript_segments").insert(
+          diarized.segments.map((seg, index) => ({
+            transcript_id: transcriptId,
+            user_id: transcript.user_id,
+            job_id: job.id,
+            segment_index: index,
+            start_ms: Math.max(0, Math.round(seg.start * 1000)),
+            end_ms: Math.max(0, Math.round(seg.end * 1000)),
+            text: seg.text,
+            speaker_id: seg.speaker
+              ? (speakerIdByLabel.get(seg.speaker) ?? null)
+              : null,
+          })),
+        );
+      }
+
+      const { error: pubErr } = await sb.rpc("publish_job_transcript", {
+        p_job_id: job.id,
+        p_transcript_text: diarized.text,
+        p_detected_language: diarized.language,
+        p_duration_seconds: Math.round(
+          diarized.duration ?? effectiveDuration,
+        ),
+        p_error_code: null,
+        p_mark_failed: false,
+      });
+      if (pubErr) throw new Error(pubErr.message);
+
+      await updateJob(sb, job.id, {
+        stage: "ready",
+        progress_pct: 100,
+        status: "ready",
+        finished_at: new Date().toISOString(),
+      });
+
+      return {
+        ok: true,
+        transcriptId,
+        jobId: job.id,
+        provider: "assemblyai",
+        speakers: diarized.speakers.length,
+        segments: diarized.segments.length,
+      };
+    }
+
     await updateJob(sb, job.id, {
       stage: "chunking",
       progress_pct: 25,
@@ -264,6 +361,7 @@ export async function processTranscript(transcriptId: string) {
     const segments = mergeSegments(chunkResults);
 
     await sb.from("transcript_segments").delete().eq("transcript_id", transcriptId);
+    await sb.from("transcript_speakers").delete().eq("transcript_id", transcriptId);
     if (segments.length > 0) {
       await sb.from("transcript_segments").insert(
         segments.map((seg, index) => ({
