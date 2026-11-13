@@ -91,15 +91,15 @@ export function TranscriptsTable({
   return (
     <div className="rounded-2xl border border-border/80 bg-white shadow-[0_12px_30px_rgba(18,61,58,0.04)]">
       <div className="overflow-x-auto overflow-y-visible">
-        <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[640px] table-fixed border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-border/70 bg-mist/60 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              <th className="px-4 py-3 font-semibold">Name</th>
-              <th className="px-4 py-3 font-semibold">Uploaded</th>
-              <th className="px-4 py-3 font-semibold">Duration</th>
-              <th className="px-4 py-3 font-semibold">Mode</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold"> </th>
+              <th className="w-[38%] px-4 py-3 font-semibold">Name</th>
+              <th className="w-[16%] px-4 py-3 font-semibold">Uploaded</th>
+              <th className="w-[12%] px-4 py-3 font-semibold">Duration</th>
+              <th className="w-[12%] px-4 py-3 font-semibold">Mode</th>
+              <th className="w-[14%] px-4 py-3 font-semibold">Status</th>
+              <th className="w-[8%] px-4 py-3 font-semibold"> </th>
             </tr>
           </thead>
           <tbody>
@@ -118,20 +118,30 @@ export function TranscriptsTable({
                 }}
                 className="cursor-pointer border-b border-border/50 last:border-0 hover:bg-mist/40 focus-visible:bg-mist/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sea/50"
               >
-                <td className="px-4 py-3.5">
-                  <div className="flex items-start gap-2.5">
-                    <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-secondary text-sea">
+                <td className="max-w-0 px-4 py-3.5">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-secondary text-sea">
                       {row.source_kind === "link" ? (
                         <Link2 className="size-3.5" />
                       ) : (
                         <FileAudio className="size-3.5" />
                       )}
                     </span>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-ink">
+                    <div className="min-w-0 flex-1 overflow-hidden">
+                      <p
+                        className="truncate font-medium text-ink"
+                        title={row.title || undefined}
+                      >
                         {row.title}
                       </p>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p
+                        className="truncate text-xs text-muted-foreground"
+                        title={
+                          (row.source_kind === "link"
+                            ? row.source_url
+                            : row.source_filename) || undefined
+                        }
+                      >
                         {row.source_kind === "link"
                           ? row.source_url
                           : row.source_filename}
