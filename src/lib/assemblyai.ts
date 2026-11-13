@@ -144,11 +144,16 @@ async function createTranscript(params: {
 
 async function pollTranscript(
   id: string,
-  options?: { timeoutMs?: number; intervalMs?: number },
+  options?: {
+    timeoutMs?: number;
+    intervalMs?: number;
+    onProgress?: (pct: number) => void | Promise<void>;
+  },
 ) {
   const timeoutMs = options?.timeoutMs ?? 240_000;
   const intervalMs = options?.intervalMs ?? 2500;
   const started = Date.now();
+  let tick = 0;
 
   while (Date.now() - started < timeoutMs) {
     const res = await fetch(`${TRANSCRIPT_URL}/${id}`, {
@@ -163,6 +168,12 @@ async function pollTranscript(
     if (payload.status === "completed") return payload;
     if (payload.status === "error") {
       throw new Error(payload.error || "AssemblyAI transcription failed");
+    }
+    tick += 1;
+    // Soft climb 42→78 while AssemblyAI processes (no native %).
+    if (options?.onProgress) {
+      const pct = Math.min(78, 42 + tick * 3);
+      await options.onProgress(pct);
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
@@ -213,15 +224,19 @@ export async function transcribeWithAssemblyAI(params: {
   language?: string | null;
   speakerLabels?: boolean;
   speakersExpected?: number | null;
+  onProgress?: (pct: number) => void | Promise<void>;
 }): Promise<AssemblyTranscriptResult> {
+  await params.onProgress?.(42);
   const audioUrl = await uploadAudio(params.bytes);
+  await params.onProgress?.(46);
   const id = await createTranscript({
     audioUrl,
     language: params.language,
     speakerLabels: params.speakerLabels !== false,
     speakersExpected: params.speakersExpected,
   });
-  const payload = await pollTranscript(id);
+  await params.onProgress?.(50);
+  const payload = await pollTranscript(id, { onProgress: params.onProgress });
   const { segments, speakers } = utterancesToSegments(payload);
   const text =
     (payload.text || "").trim() ||

@@ -53,6 +53,11 @@ export type NormalisedTranscript = {
   };
 };
 
+export type ProgressReporter = (
+  pct: number,
+  detail?: string,
+) => void | Promise<void>;
+
 export type TranscribeRequest = {
   bytes: Uint8Array;
   filename: string;
@@ -65,7 +70,47 @@ export type TranscribeRequest = {
   speakersExpected?: number | null;
   /** TRANSCRIPTION_PROVIDER=assemblyai — use AssemblyAI without requiring speakers. */
   assemblyai?: boolean;
+  /** Report mid-job progress (35→84) so the desk bar does not freeze. */
+  onProgress?: ProgressReporter;
 };
+
+/** Soft tick while a long provider call has no native progress. */
+async function withProgressTicker<T>(params: {
+  from: number;
+  to: number;
+  estimatedMs: number;
+  onProgress?: ProgressReporter;
+  detail?: string;
+  work: () => Promise<T>;
+}): Promise<T> {
+  const { from, to, onProgress } = params;
+  if (!onProgress || to <= from) return params.work();
+
+  let current = from;
+  await onProgress(current, params.detail);
+  const steps = Math.max(4, Math.min(24, Math.floor((to - from) / 2)));
+  const step = (to - from) / steps;
+  const interval = Math.max(400, Math.min(4000, params.estimatedMs / steps));
+  const timer = setInterval(() => {
+    current = Math.min(to - 1, current + step);
+    void onProgress(Math.round(current), params.detail);
+  }, interval);
+
+  try {
+    const result = await params.work();
+    await onProgress(to, params.detail);
+    return result;
+  } finally {
+    clearInterval(timer);
+  }
+}
+
+function estimateAsrMs(byteLength: number, quality: string) {
+  // Rough wall-clock for Groq Whisper on extracted mono audio.
+  const minutes = Math.max(1, byteLength / (128_000 / 8) / 60);
+  const base = minutes * (quality === "standard" ? 2500 : 4500);
+  return Math.max(12_000, Math.min(180_000, base));
+}
 
 export function isTranscriptionConfigured() {
   return isGroqConfigured();
@@ -101,6 +146,9 @@ async function fillCoverageGaps(params: {
   segments: TimedSegment[];
   duration: number;
   baseText: string;
+  onProgress?: ProgressReporter;
+  progressFrom?: number;
+  progressTo?: number;
 }): Promise<{ segments: TimedSegment[]; gapsFilled: number; gapsMissed: number }> {
   if (!(await isFfmpegAvailable()) || params.duration <= 0) {
     return { segments: params.segments, gapsFilled: 0, gapsMissed: 0 };
@@ -110,11 +158,22 @@ async function fillCoverageGaps(params: {
   const gaps = findCoverageGaps(params.segments, params.duration, {
     minGapSeconds: policy.minGapSeconds,
   });
+  const planned = gaps.slice(0, policy.maxGaps);
   let segments = params.segments;
   let gapsFilled = 0;
   let gapsMissed = 0;
+  const from = params.progressFrom ?? 70;
+  const to = params.progressTo ?? 84;
 
-  for (const gap of gaps.slice(0, policy.maxGaps)) {
+  for (let i = 0; i < planned.length; i++) {
+    const gap = planned[i];
+    if (params.onProgress) {
+      const pct =
+        planned.length <= 1
+          ? from
+          : Math.round(from + ((to - from) * i) / planned.length);
+      await params.onProgress(pct, "gap_fill");
+    }
     const start = Math.max(0, gap.start - 0.35);
     const durationSec = Math.min(params.duration - start, gap.duration + 0.7);
     const slice = await extractAudioSlice({
@@ -162,6 +221,10 @@ async function fillCoverageGaps(params: {
     gapsFilled += 1;
   }
 
+  if (params.onProgress && planned.length > 0) {
+    await params.onProgress(to, "gap_fill");
+  }
+
   const remaining = Math.max(0, gaps.length - policy.maxGaps);
   return { segments, gapsFilled, gapsMissed: gapsMissed + remaining };
 }
@@ -169,6 +232,8 @@ async function fillCoverageGaps(params: {
 export async function transcribeAudio(
   request: TranscribeRequest,
 ): Promise<NormalisedTranscript> {
+  const report = request.onProgress;
+
   // AssemblyAI path: speaker diarization and/or TRANSCRIPTION_PROVIDER=assemblyai.
   // Groq Whisper has no diarization API.
   if (request.speakers || request.assemblyai) {
@@ -179,12 +244,25 @@ export async function transcribeAudio(
           : "ASSEMBLYAI_API_KEY is not configured.",
       );
     }
-    const raw = await transcribeWithAssemblyAI({
-      bytes: request.bytes,
-      language: request.language,
-      speakerLabels: Boolean(request.speakers),
-      speakersExpected: request.speakersExpected,
+    await report?.(38, "diarizing");
+    const raw = await withProgressTicker({
+      from: 40,
+      to: 82,
+      estimatedMs: estimateAsrMs(request.bytes.byteLength, "enhanced") * 1.4,
+      onProgress: report,
+      detail: "diarizing",
+      work: () =>
+        transcribeWithAssemblyAI({
+          bytes: request.bytes,
+          language: request.language,
+          speakerLabels: Boolean(request.speakers),
+          speakersExpected: request.speakersExpected,
+          onProgress: report
+            ? (pct) => report(Math.min(82, Math.max(40, pct)), "diarizing")
+            : undefined,
+        }),
     });
+    await report?.(84, "diarizing");
     return {
       text: raw.text,
       detectedLanguage: raw.language,
@@ -216,16 +294,26 @@ export async function transcribeAudio(
   const quality =
     request.quality ||
     (model === "whisper-large-v3" ? "enhanced" : "standard");
+  const asrMs = estimateAsrMs(request.bytes.byteLength, quality);
 
   // Pass 1: no instructional prompt (negations cause Whisper to echo them).
-  const raw1 = await transcribeWithGroq({
-    bytes: request.bytes,
-    filename: request.filename,
-    contentType: request.contentType,
-    model,
-    language: request.language,
-    prompt: "",
-    temperature: 0,
+  await report?.(36, "pass_1");
+  const raw1 = await withProgressTicker({
+    from: 38,
+    to: quality === "standard" ? 78 : 55,
+    estimatedMs: asrMs,
+    onProgress: report,
+    detail: "pass_1",
+    work: () =>
+      transcribeWithGroq({
+        bytes: request.bytes,
+        filename: request.filename,
+        contentType: request.contentType,
+        model,
+        language: request.language,
+        prompt: "",
+        temperature: 0,
+      }),
   });
   let best = normaliseRaw(raw1);
   let secondPass = false;
@@ -234,19 +322,30 @@ export async function transcribeAudio(
   if (quality === "enhanced" || quality === "deep") {
     const vocab = vocabularyPromptFromTranscript(best.text);
     if (vocab) {
-      const raw2 = await transcribeWithGroq({
-        bytes: request.bytes,
-        filename: request.filename,
-        contentType: request.contentType,
-        model,
-        language: request.language,
-        prompt: vocab,
-        temperature: 0,
+      await report?.(56, "pass_2");
+      const raw2 = await withProgressTicker({
+        from: 58,
+        to: quality === "deep" ? 68 : 78,
+        estimatedMs: asrMs * 0.9,
+        onProgress: report,
+        detail: "pass_2",
+        work: () =>
+          transcribeWithGroq({
+            bytes: request.bytes,
+            filename: request.filename,
+            contentType: request.contentType,
+            model,
+            language: request.language,
+            prompt: vocab,
+            temperature: 0,
+          }),
       });
       const pass2 = normaliseRaw(raw2);
       const picked = pickBetterPass(best, pass2);
       secondPass = picked.text !== best.text;
       best = picked;
+    } else {
+      await report?.(78, "pass_2");
     }
   }
 
@@ -267,7 +366,12 @@ export async function transcribeAudio(
     segments: best.segments,
     duration,
     baseText: best.text,
+    onProgress: report,
+    progressFrom: quality === "deep" ? 70 : 78,
+    progressTo: 84,
   });
+
+  await report?.(84, "transcribe_done");
 
   const segments = filled.segments;
   const text =

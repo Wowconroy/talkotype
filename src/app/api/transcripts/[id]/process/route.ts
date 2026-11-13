@@ -179,16 +179,27 @@ export async function POST(_request: Request, { params }: Params) {
     let audioFilename = filename;
     let audioType = media.content_type || contentType;
 
-    // Videos / oversized uploads → compact mono MP3 before Groq.
-    if (shouldExtract) {
+    const jobId = transcript.active_job_id as string;
+    let lastReportedPct = 10;
+
+    const reportProgress = async (pct: number, stage?: string) => {
+      const next = Math.max(lastReportedPct, Math.min(99, Math.round(pct)));
+      // Only write when % advances (avoids hammering Supabase during ticks).
+      if (next <= lastReportedPct) return;
+      lastReportedPct = next;
       await admin
         .from("transcription_jobs")
         .update({
-          progress_pct: 20,
-          stage: "preparing_audio",
+          progress_pct: next,
+          ...(stage ? { stage } : {}),
           updated_at: new Date().toISOString(),
         })
-        .eq("id", transcript.active_job_id);
+        .eq("id", jobId);
+    };
+
+    // Videos / oversized uploads → compact mono MP3 before Groq.
+    if (shouldExtract) {
+      await reportProgress(18, "preparing_audio");
 
       if (!(await isFfmpegAvailable())) {
         throw new Error(
@@ -196,11 +207,23 @@ export async function POST(_request: Request, { params }: Params) {
         );
       }
 
-      const extracted = await extractAudioFile({
-        sourceBytes: bytes,
-        sourceFilename: filename,
-        maxSeconds,
-      });
+      // Soft climb during FFmpeg extract (can take minutes on long MP4s).
+      let extractPct = 18;
+      const extractTick = setInterval(() => {
+        extractPct = Math.min(32, extractPct + 1);
+        void reportProgress(extractPct, "preparing_audio");
+      }, 2000);
+
+      let extracted: Awaited<ReturnType<typeof extractAudioFile>> = null;
+      try {
+        extracted = await extractAudioFile({
+          sourceBytes: bytes,
+          sourceFilename: filename,
+          maxSeconds,
+        });
+      } finally {
+        clearInterval(extractTick);
+      }
       if (!extracted) {
         throw new Error(
           "Could not extract audio from this video. Try exporting MP3/M4A and upload again.",
@@ -209,6 +232,7 @@ export async function POST(_request: Request, { params }: Params) {
       audioBytes = extracted.bytes;
       audioFilename = extracted.filename;
       audioType = extracted.contentType;
+      await reportProgress(34, "preparing_audio");
     }
 
     if (audioBytes.byteLength > GROQ_MAX_UPLOAD_BYTES) {
@@ -217,14 +241,10 @@ export async function POST(_request: Request, { params }: Params) {
       );
     }
 
-    await admin
-      .from("transcription_jobs")
-      .update({
-        progress_pct: 35,
-        stage: speakersRequested ? "diarizing" : "transcribing",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", transcript.active_job_id);
+    await reportProgress(
+      35,
+      speakersRequested ? "diarizing" : "transcribing",
+    );
 
     const quality = qualityForMode(
       (job?.requested_mode as string | null | undefined) ?? null,
@@ -240,6 +260,15 @@ export async function POST(_request: Request, { params }: Params) {
       speakers: speakersRequested,
       speakersExpected,
       assemblyai: provider === "assemblyai",
+      onProgress: (pct, detail) =>
+        reportProgress(
+          pct,
+          detail === "diarizing"
+            ? "diarizing"
+            : speakersRequested
+              ? "diarizing"
+              : "transcribing",
+        ),
     });
 
     const rawResult = {

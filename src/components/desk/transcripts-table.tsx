@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -22,6 +23,7 @@ import {
 import {
   formatDuration,
   formatUploaded,
+  isActiveDeskStatus,
   modeLabel,
   statusLabel,
   type DeskTranscript,
@@ -103,84 +105,111 @@ export function TranscriptsTable({
             </tr>
           </thead>
           <tbody>
-            {items.map((row) => (
-              <tr
-                key={row.id}
-                tabIndex={0}
-                role="link"
-                aria-label={`Open transcript ${row.title}`}
-                onClick={() => openTranscript(row.id)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    openTranscript(row.id);
-                  }
-                }}
-                className="cursor-pointer border-b border-border/50 last:border-0 hover:bg-mist/40 focus-visible:bg-mist/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sea/50"
-              >
-                <td className="max-w-0 px-4 py-3.5">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-secondary text-sea">
-                      {row.source_kind === "link" ? (
-                        <Link2 className="size-3.5" />
-                      ) : (
-                        <FileAudio className="size-3.5" />
-                      )}
-                    </span>
-                    <div className="min-w-0 flex-1 overflow-hidden">
-                      <p
-                        className="truncate font-medium text-ink"
-                        title={row.title || undefined}
-                      >
-                        {row.title}
-                      </p>
-                      <p
-                        className="truncate text-xs text-muted-foreground"
-                        title={
-                          (row.source_kind === "link"
-                            ? row.source_url
-                            : row.source_filename) || undefined
-                        }
-                      >
-                        {row.source_kind === "link"
-                          ? row.source_url
-                          : row.source_filename}
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3.5 text-muted-foreground">
-                  {formatUploaded(row.created_at)}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3.5 text-muted-foreground">
-                  {formatDuration(row.duration_seconds)}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3.5 text-muted-foreground">
-                  {modeLabel(row.model, row.requested_mode)}
-                </td>
-                <td className="px-4 py-3.5">
-                  <StatusPill row={row} />
-                </td>
-                <td
-                  className="px-4 py-3.5 text-right"
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                >
-                  <RowMenu
-                    row={row}
-                    open={menuId === row.id}
-                    onToggle={() =>
-                      setMenuId((id) => (id === row.id ? null : row.id))
-                    }
-                    onClose={() => setMenuId(null)}
-                    onOpenDialog={(dialog) => {
-                      setMenuId(null);
-                      onOpenDialog(dialog);
+            {items.map((row) => {
+              const active = isActiveDeskStatus(row);
+              const pct =
+                typeof row.progress_pct === "number"
+                  ? Math.max(1, Math.min(99, Math.round(row.progress_pct)))
+                  : active
+                    ? 1
+                    : 0;
+              return (
+                <Fragment key={row.id}>
+                  <tr
+                    tabIndex={0}
+                    role="link"
+                    aria-label={`Open transcript ${row.title}`}
+                    onClick={() => openTranscript(row.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openTranscript(row.id);
+                      }
                     }}
-                  />
-                </td>
-              </tr>
-            ))}
+                    className={`cursor-pointer border-b border-border/50 last:border-0 hover:bg-mist/40 focus-visible:bg-mist/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sea/50 ${
+                      active ? "!border-b-0" : ""
+                    }`}
+                  >
+                    <td className="max-w-0 px-4 py-3.5">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-secondary text-sea">
+                          {row.source_kind === "link" ? (
+                            <Link2 className="size-3.5" />
+                          ) : (
+                            <FileAudio className="size-3.5" />
+                          )}
+                        </span>
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                          <p
+                            className="truncate font-medium text-ink"
+                            title={row.title || undefined}
+                          >
+                            {row.title}
+                          </p>
+                          <p
+                            className="truncate text-xs text-muted-foreground"
+                            title={
+                              (row.source_kind === "link"
+                                ? row.source_url
+                                : row.source_filename) || undefined
+                            }
+                          >
+                            {row.source_kind === "link"
+                              ? row.source_url
+                              : row.source_filename}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-muted-foreground">
+                      {formatUploaded(row.created_at)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-muted-foreground">
+                      {formatDuration(row.duration_seconds)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-muted-foreground">
+                      {modeLabel(row.model, row.requested_mode)}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <StatusPill row={row} />
+                    </td>
+                    <td
+                      className="px-4 py-3.5 text-right"
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      <RowMenu
+                        row={row}
+                        open={menuId === row.id}
+                        onToggle={() =>
+                          setMenuId((id) => (id === row.id ? null : row.id))
+                        }
+                        onClose={() => setMenuId(null)}
+                        onOpenDialog={(dialog) => {
+                          setMenuId(null);
+                          onOpenDialog(dialog);
+                        }}
+                      />
+                    </td>
+                  </tr>
+                  {active ? (
+                    <tr
+                      className="border-b border-border/50 last:border-0"
+                      aria-hidden
+                    >
+                      <td colSpan={6} className="!p-0">
+                        <div className="h-1 w-full bg-mist">
+                          <div
+                            className="h-full bg-sea transition-[width] duration-700 ease-out"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -179,13 +179,13 @@ export function DeskShell({ displayName, initial }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadAll identity changes with the same deps
   }, [page, activeView, debouncedQuery]);
 
-  // Poll while jobs are active so returning users see real stages/progress.
+  // Poll while jobs are active so the progress bar tracks mid-ASR ticks.
   useEffect(() => {
     const hasActive = transcripts.some(isActiveDeskStatus);
     if (!hasActive) return;
     const id = window.setInterval(() => {
       void loadAll({ silent: true });
-    }, 4000);
+    }, 2000);
     return () => window.clearInterval(id);
   }, [transcripts, loadAll]);
 
