@@ -208,11 +208,18 @@ export function AccountSettings() {
       if (!res.ok || !data.url) {
         throw new Error(data.error || "Could not open billing portal.");
       }
-      window.location.assign(data.url);
+      // Paddle hosts the portal (no return-to-app button). Keep Talkotype open.
+      const popup = window.open(data.url, "_blank", "noopener,noreferrer");
+      if (!popup) {
+        window.location.assign(data.url);
+        return;
+      }
+      setMessage("Billing portal opened in a new tab. This page stays here.");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Could not open billing portal.",
       );
+    } finally {
       setPortalBusy(false);
     }
   }
