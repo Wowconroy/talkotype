@@ -269,7 +269,7 @@
 
 .folder-cat-tail {
   transform-box: fill-box;
-  transform-origin: left center;
+  transform-origin: right center;
   animation: folder-tail-swish 2.4s ease-in-out infinite;
 }
 

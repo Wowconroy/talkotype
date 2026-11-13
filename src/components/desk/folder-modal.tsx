@@ -196,9 +196,8 @@ function CatWithYarn() {
       >
         <ellipse cx="140" cy="108" rx="90" ry="7" fill="#cfe6e0" opacity="0.75" />
 
-        {/* yarn trail + ball in front of the cat (right side) */}
         <path
-          d="M188 100 C202 96, 214 102, 226 97"
+          d="M200 100 C214 96, 224 102, 234 98"
           stroke="#ff5c45"
           strokeWidth="2.5"
           strokeLinecap="round"
@@ -206,84 +205,84 @@ function CatWithYarn() {
           opacity="0.75"
         />
         <g className="folder-yarn-ball">
-          <circle cx="242" cy="90" r="16" fill="#ff5c45" />
+          <circle cx="248" cy="90" r="15" fill="#ff5c45" />
           <path
-            d="M230 86c7 2 12 7 18 5M232 94c6-1 11 3 16 1M234 80c5 5 10 9 15 12"
+            d="M236 86c7 2 12 7 18 5M238 94c6-1 11 3 16 1M240 80c5 5 10 9 15 12"
             stroke="#ffe8e3"
             strokeWidth="1.8"
             strokeLinecap="round"
           />
-          <circle cx="248" cy="84" r="2" fill="#ffe8e3" opacity="0.7" />
         </g>
 
-        {/* Cat faces RIGHT toward the yarn: 2 hind + 2 front paws */}
+        {/* Sitting cat facing right: tail → haunch → body → legs → head */}
         <g className="folder-cat">
-          {/* tail up behind (left / rear) */}
+          {/* Tail starts INSIDE the haunch so it stays attached */}
           <path
             className="folder-cat-tail"
-            d="M52 86 C34 72, 24 58, 28 44 C30 36, 40 34, 46 42"
+            d="M78 90 C58 92, 42 78, 36 58 C32 46, 40 38, 50 44"
             stroke="#123d3a"
-            strokeWidth="9"
+            strokeWidth="10"
             strokeLinecap="round"
             fill="none"
           />
-          <circle cx="46" cy="42" r="5" fill="#123d3a" />
+          <circle cx="50" cy="44" r="5" fill="#123d3a" />
 
-          {/* hind paws under the haunch */}
-          <ellipse cx="64" cy="100" rx="12" ry="7" fill="#0d2e2c" />
-          <ellipse cx="84" cy="101" rx="11" ry="6.5" fill="#0d2e2c" />
-          <circle cx="58" cy="101" r="1.4" fill="#ff5c45" opacity="0.5" />
-          <circle cx="64" cy="103" r="1.3" fill="#ff5c45" opacity="0.5" />
-          <circle cx="70" cy="101" r="1.3" fill="#ff5c45" opacity="0.5" />
+          {/* Haunch + body cover the tail root */}
+          <ellipse cx="86" cy="88" rx="28" ry="22" fill="#123d3a" />
+          <ellipse cx="124" cy="84" rx="44" ry="24" fill="#123d3a" />
+          <ellipse cx="130" cy="78" rx="20" ry="9" fill="#1f524d" opacity="0.28" />
 
-          {/* body + haunch */}
-          <ellipse cx="110" cy="82" rx="48" ry="26" fill="#123d3a" />
-          <ellipse cx="78" cy="88" rx="22" ry="18" fill="#123d3a" />
-          <ellipse cx="118" cy="78" rx="22" ry="10" fill="#1f524d" opacity="0.28" />
+          {/* Two hind paws under haunch */}
+          <ellipse cx="68" cy="102" rx="12" ry="7" fill="#0d2e2c" />
+          <ellipse cx="90" cy="103" rx="11" ry="6.5" fill="#0d2e2c" />
+          <circle cx="62" cy="103" r="1.4" fill="#ff5c45" opacity="0.5" />
+          <circle cx="68" cy="105" r="1.3" fill="#ff5c45" opacity="0.5" />
+          <circle cx="74" cy="103" r="1.3" fill="#ff5c45" opacity="0.5" />
 
-          {/* planted front paw under the chest */}
-          <ellipse cx="132" cy="101" rx="11" ry="6" fill="#0d2e2c" />
-          <circle cx="126" cy="102" r="1.5" fill="#ff5c45" opacity="0.55" />
-          <circle cx="132" cy="104" r="1.4" fill="#ff5c45" opacity="0.55" />
-          <circle cx="138" cy="102" r="1.4" fill="#ff5c45" opacity="0.55" />
+          {/* Planted front paw under chest */}
+          <ellipse cx="138" cy="103" rx="11" ry="6" fill="#0d2e2c" />
+          <circle cx="132" cy="104" r="1.5" fill="#ff5c45" opacity="0.55" />
+          <circle cx="138" cy="106" r="1.4" fill="#ff5c45" opacity="0.55" />
+          <circle cx="144" cy="104" r="1.4" fill="#ff5c45" opacity="0.55" />
 
-          {/* other front paw batting the yarn */}
+          {/* Front batting paw from CHEST/shoulder, not the head */}
           <g className="folder-cat-paw">
             <path
-              d="M148 86 C162 78, 176 80, 190 88"
+              d="M142 90 C158 86, 174 88, 188 94"
               stroke="#123d3a"
-              strokeWidth="11"
+              strokeWidth="12"
               strokeLinecap="round"
               fill="none"
             />
-            <ellipse cx="196" cy="90" rx="10" ry="7" fill="#123d3a" />
-            <circle cx="202" cy="87" r="1.8" fill="#ff5c45" opacity="0.75" />
-            <circle cx="200" cy="93" r="1.6" fill="#ff5c45" opacity="0.75" />
-            <circle cx="205" cy="92" r="1.5" fill="#ff5c45" opacity="0.75" />
+            <ellipse cx="194" cy="95" rx="10" ry="7" fill="#123d3a" />
+            <circle cx="200" cy="92" r="1.8" fill="#ff5c45" opacity="0.75" />
+            <circle cx="198" cy="98" r="1.6" fill="#ff5c45" opacity="0.75" />
+            <circle cx="203" cy="97" r="1.5" fill="#ff5c45" opacity="0.75" />
           </g>
 
-          {/* head facing the yarn */}
+          {/* Neck bridge, then head on top */}
+          <ellipse cx="156" cy="72" rx="14" ry="12" fill="#123d3a" />
           <g className="folder-cat-head">
-            <circle cx="168" cy="58" r="28" fill="#123d3a" />
-            <path d="M148 42 L144 20 L164 36 Z" fill="#123d3a" />
-            <path d="M188 42 L192 20 L172 36 Z" fill="#123d3a" />
-            <path d="M150 38 L147 26 L160 35 Z" fill="#ff5c45" opacity="0.6" />
-            <path d="M186 38 L189 26 L176 35 Z" fill="#ff5c45" opacity="0.6" />
+            <circle cx="172" cy="54" r="26" fill="#123d3a" />
+            <path d="M154 40 L150 20 L168 34 Z" fill="#123d3a" />
+            <path d="M190 40 L194 20 L176 34 Z" fill="#123d3a" />
+            <path d="M156 36 L153 25 L165 33 Z" fill="#ff5c45" opacity="0.6" />
+            <path d="M188 36 L191 25 L179 33 Z" fill="#ff5c45" opacity="0.6" />
 
-            <ellipse cx="158" cy="58" rx="4" ry="5" fill="#7ec8c3" />
-            <ellipse cx="178" cy="58" rx="4" ry="5" fill="#7ec8c3" />
-            <ellipse cx="159.2" cy="56.5" rx="1.3" ry="1.7" fill="#fff" />
-            <ellipse cx="179.2" cy="56.5" rx="1.3" ry="1.7" fill="#fff" />
+            <ellipse cx="162" cy="54" rx="4" ry="5" fill="#7ec8c3" />
+            <ellipse cx="182" cy="54" rx="4" ry="5" fill="#7ec8c3" />
+            <ellipse cx="163.2" cy="52.5" rx="1.3" ry="1.7" fill="#fff" />
+            <ellipse cx="183.2" cy="52.5" rx="1.3" ry="1.7" fill="#fff" />
 
-            <ellipse cx="168" cy="66" rx="3" ry="2" fill="#ff5c45" opacity="0.85" />
+            <ellipse cx="172" cy="62" rx="3" ry="2" fill="#ff5c45" opacity="0.85" />
             <path
-              d="M165 70c2 2.5 4 2.5 6 0"
+              d="M169 66c2 2.5 4 2.5 6 0"
               stroke="#7ec8c3"
               strokeWidth="1.8"
               strokeLinecap="round"
             />
             <path
-              d="M150 62 H140 M150 67 H138 M186 62 H196 M186 67 H198"
+              d="M154 58 H144 M154 63 H142 M190 58 H200 M190 63 H202"
               stroke="#7ec8c3"
               strokeWidth="1.5"
               strokeLinecap="round"
