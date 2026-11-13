@@ -239,12 +239,18 @@ export function AccountSettings({
         throw new Error(data.error || "Could not open billing portal.");
       }
       // Paddle hosts the portal (no return-to-app button). Keep Talkotype open.
-      const popup = window.open(data.url, "_blank", "noopener,noreferrer");
-      if (!popup) {
-        window.location.assign(data.url);
-        return;
+      // Do NOT use window.open(..., "noopener") + null-check: browsers return null
+      // even when the tab opens, which used to also navigate this page to Paddle.
+      const tab = window.open("about:blank", "_blank");
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = data.url;
+        setMessage("Billing portal opened in a new tab. This page stays here.");
+      } else {
+        setError(
+          "Pop-up blocked — allow pop-ups for Talkotype, then try Manage plan again.",
+        );
       }
-      setMessage("Billing portal opened in a new tab. This page stays here.");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Could not open billing portal.",
