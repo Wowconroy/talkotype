@@ -10,9 +10,12 @@ type Props = {
 };
 
 const MODE_ART: Record<TranscriptionMode, { src: string; alt: string }> = {
-  fast: { src: "/modes/swift.jpg", alt: "Cheetah sprinting — Swift mode" },
-  balanced: { src: "/modes/steady.jpg", alt: "Dolphin leaping — Steady mode" },
-  accurate: { src: "/modes/deep.jpg", alt: "Whale diving — Deep mode" },
+  fast: { src: "/modes/swift.png", alt: "Cheetah sprinting — Swift mode" },
+  balanced: { src: "/modes/steady.png", alt: "Dolphin leaping — Steady mode" },
+  accurate: {
+    src: "/modes/deep.png",
+    alt: "Careful listener taking notes — Deep mode",
+  },
 };
 
 export function ModePicker({ value, onChange, disabled }: Props) {
@@ -41,13 +44,13 @@ export function ModePicker({ value, onChange, disabled }: Props) {
                   : "border-border bg-white hover:border-sea/60 hover:bg-mist/60"
               }`}
             >
-              <div className="relative mx-auto h-14 w-full overflow-hidden rounded-xl bg-white/70">
+              <div className="relative mx-auto h-14 w-full overflow-hidden">
                 <Image
                   src={art.src}
                   alt={art.alt}
                   fill
                   sizes="120px"
-                  className="object-contain p-1"
+                  className="object-contain p-0.5"
                 />
               </div>
               <p

@@ -34,7 +34,7 @@ import {
   type TranscribeOptions,
 } from "./types";
 
-const OPTIONS_STORAGE_KEY = "talkotype.transcribeOptions.v3";
+const OPTIONS_STORAGE_KEY = "talkotype.transcribeOptions.v4";
 
 type Props = {
   open: boolean;

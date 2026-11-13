@@ -48,7 +48,11 @@ export async function transcribeWithGroq(params: {
   form.append("temperature", String(params.temperature ?? 0));
   form.append("timestamp_granularities[]", "segment");
   if (params.language) {
-    form.append("language", params.language);
+    // Whisper expects ISO-639-1; map en-GB / en-US → en
+    const lang = params.language.toLowerCase().startsWith("en")
+      ? "en"
+      : params.language;
+    form.append("language", lang);
   }
   if (params.prompt) {
     form.append("prompt", params.prompt.slice(0, 800));

@@ -76,7 +76,8 @@ const STAGE_LABELS: Record<string, string> = {
 
 export const AUDIO_LANGUAGES = [
   { value: "", label: "Auto-detect", flag: "🌐" },
-  { value: "en", label: "English", flag: "🇬🇧" },
+  { value: "en", label: "English (US)", flag: "🇺🇸" },
+  { value: "en-GB", label: "English (UK)", flag: "🇬🇧" },
   { value: "uk", label: "Ukrainian", flag: "🇺🇦" },
   { value: "pl", label: "Polish", flag: "🇵🇱" },
   { value: "de", label: "German", flag: "🇩🇪" },
@@ -127,7 +128,7 @@ export type TranscribeOptions = {
 };
 
 export const DEFAULT_TRANSCRIBE_OPTIONS: TranscribeOptions = {
-  language: "",
+  language: "en",
   mode: "fast",
   speakers: false,
   transcribeToEnglish: false,
