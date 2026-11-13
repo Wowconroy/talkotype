@@ -1,8 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Search, Upload } from "lucide-react";
+import { DeskPaginationBar } from "./desk-pagination";
 import { DeskSidebar } from "./desk-sidebar";
 import type { FolderModalMode } from "./folder-modal";
 import type { TranscriptDialog } from "./transcript-action-modals";
@@ -14,6 +15,11 @@ import {
   type DeskUsage,
   type QuotaSnapshot,
 } from "./types";
+import {
+  DESK_PAGE_SIZE,
+  paginationFromTotal,
+  type DeskPagination,
+} from "@/lib/desk-pagination";
 
 const FolderModal = dynamic(
   () => import("./folder-modal").then((m) => m.FolderModal),
@@ -39,6 +45,7 @@ type DeskInitial = {
   usage: DeskUsage;
   plan: string;
   ownerEmail: string | null;
+  pagination: DeskPagination;
 };
 
 type Props = {
@@ -56,12 +63,21 @@ export function DeskShell({ displayName, initial }: Props) {
   const [folders, setFolders] = useState(initial.folders);
   const [usage, setUsage] = useState<DeskUsage>(initial.usage);
   const [plan, setPlan] = useState(initial.plan);
+  const [pagination, setPagination] = useState<DeskPagination>(
+    initial.pagination ??
+      paginationFromTotal(initial.transcripts.length, 1, DESK_PAGE_SIZE),
+  );
+  const [page, setPage] = useState(initial.pagination?.page ?? 1);
   const [activeView, setActiveView] = useState<"recent" | string>(() => {
     if (typeof window === "undefined") return "recent";
     const folder = new URLSearchParams(window.location.search).get("folder");
     return folder || "recent";
   });
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("q") ?? "";
+  });
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
   const [transcribeOpen, setTranscribeOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [folderDialog, setFolderDialog] = useState<FolderDialog | null>(null);
@@ -75,28 +91,55 @@ export function DeskShell({ displayName, initial }: Props) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoading(true);
-    setLoadError(null);
-    try {
-      const res = await fetch("/api/desk", { credentials: "same-origin" });
-      if (!res.ok) {
-        throw new Error("Could not refresh your desk.");
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [query]);
+
+  const loadAll = useCallback(
+    async (opts?: {
+      silent?: boolean;
+      page?: number;
+      view?: string;
+      q?: string;
+    }) => {
+      if (!opts?.silent) setLoading(true);
+      setLoadError(null);
+      try {
+        const nextPage = opts?.page ?? page;
+        const nextView = opts?.view ?? activeView;
+        const nextQ = opts?.q ?? debouncedQuery;
+        const params = new URLSearchParams();
+        params.set("page", String(nextPage));
+        if (nextView !== "recent") params.set("folder", nextView);
+        if (nextQ) params.set("q", nextQ);
+
+        const res = await fetch(`/api/desk?${params.toString()}`, {
+          credentials: "same-origin",
+        });
+        if (!res.ok) {
+          throw new Error("Could not refresh your desk.");
+        }
+        const data = (await res.json()) as DeskInitial & {
+          displayName?: string;
+        };
+        setTranscripts(data.transcripts ?? []);
+        setFolders(data.folders ?? []);
+        setUsage(data.usage);
+        setPlan(data.plan ?? "free");
+        setOwnerEmail(data.ownerEmail ?? null);
+        if (data.pagination) {
+          setPagination(data.pagination);
+          setPage(data.pagination.page);
+        }
+      } catch {
+        setLoadError("Could not refresh your desk. Try again.");
+      } finally {
+        setLoading(false);
       }
-      const data = (await res.json()) as DeskInitial & {
-        displayName?: string;
-      };
-      setTranscripts(data.transcripts ?? []);
-      setFolders(data.folders ?? []);
-      setUsage(data.usage);
-      setPlan(data.plan ?? "free");
-      setOwnerEmail(data.ownerEmail ?? null);
-    } catch {
-      setLoadError("Could not refresh your desk. Try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [page, activeView, debouncedQuery],
+  );
 
   function applyQuota(quota?: QuotaSnapshot | null) {
     if (!quota || typeof quota.transcripts_used !== "number") return;
@@ -125,6 +168,17 @@ export function DeskShell({ displayName, initial }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [transcribeOpen, importOpen]);
 
+  // Reload when folder / search / page changes (skip first paint — SSR already loaded).
+  const skipFirstListFetch = useRef(true);
+  useEffect(() => {
+    if (skipFirstListFetch.current) {
+      skipFirstListFetch.current = false;
+      return;
+    }
+    void loadAll({ page, view: activeView, q: debouncedQuery });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadAll identity changes with the same deps
+  }, [page, activeView, debouncedQuery]);
+
   // Poll while jobs are active so returning users see real stages/progress.
   useEffect(() => {
     const hasActive = transcripts.some(isActiveDeskStatus);
@@ -137,27 +191,15 @@ export function DeskShell({ displayName, initial }: Props) {
 
   const activeFolder = folders.find((f) => f.id === activeView) ?? null;
 
-  const filtered = useMemo(() => {
-    let rows = transcripts;
-    if (activeView !== "recent") {
-      rows = rows.filter((r) => r.folder_id === activeView);
-    }
-    const q = query.trim().toLowerCase();
-    if (q) {
-      rows = rows.filter((r) => {
-        const hay = [
-          r.title,
-          r.source_filename ?? "",
-          r.source_url ?? "",
-          r.status,
-        ]
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(q);
-      });
-    }
-    return rows;
-  }, [transcripts, activeView, query]);
+  function selectRecent() {
+    setActiveView("recent");
+    setPage(1);
+  }
+
+  function selectFolder(id: string) {
+    setActiveView(id);
+    setPage(1);
+  }
 
   function openCreateFolder() {
     setFolderError(null);
@@ -202,6 +244,7 @@ export function DeskShell({ displayName, initial }: Props) {
         }
         setFolders((prev) => [...prev, data.folder as DeskFolder]);
         setActiveView(data.folder.id);
+        setPage(1);
         setFolderDialog(null);
         return;
       }
@@ -249,9 +292,12 @@ export function DeskShell({ displayName, initial }: Props) {
         return;
       }
       setFolders((prev) => prev.filter((folder) => folder.id !== id));
-      if (activeView === id) setActiveView("recent");
+      if (activeView === id) {
+        setActiveView("recent");
+        setPage(1);
+      }
       setFolderDialog(null);
-      await loadAll({ silent: true });
+      await loadAll({ silent: true, view: "recent", page: 1 });
     } finally {
       setFolderBusy(false);
     }
@@ -294,8 +340,8 @@ export function DeskShell({ displayName, initial }: Props) {
           plan={plan}
           folders={folders}
           activeView={activeView}
-          onSelectRecent={() => setActiveView("recent")}
-          onSelectFolder={setActiveView}
+          onSelectRecent={selectRecent}
+          onSelectFolder={selectFolder}
           onCreateFolder={openCreateFolder}
           onRenameFolder={openRenameFolder}
           onDeleteFolder={openDeleteFolder}
@@ -312,7 +358,10 @@ export function DeskShell({ displayName, initial }: Props) {
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setPage(1);
+                  }}
                   placeholder="Search files…"
                   className="w-full rounded-xl border border-border bg-white py-2.5 pl-9 pr-3 text-sm text-ink outline-none placeholder:text-muted-foreground focus:border-sea focus:ring-2 focus:ring-sea/30"
                 />
@@ -335,7 +384,7 @@ export function DeskShell({ displayName, initial }: Props) {
           ) : null}
 
           <TranscriptsTable
-            items={filtered}
+            items={transcripts}
             loading={loading}
             emptyHint={
               activeView === "recent"
@@ -343,6 +392,12 @@ export function DeskShell({ displayName, initial }: Props) {
                 : "This folder is empty. Upload while it’s selected to file new jobs here."
             }
             onOpenDialog={setTranscriptDialog}
+          />
+
+          <DeskPaginationBar
+            pagination={pagination}
+            disabled={loading}
+            onPageChange={setPage}
           />
         </section>
       </div>
@@ -359,7 +414,8 @@ export function DeskShell({ displayName, initial }: Props) {
         }
         onUploaded={(quota) => {
           applyQuota(quota);
-          void loadAll({ silent: true });
+          setPage(1);
+          void loadAll({ silent: true, page: 1 });
         }}
         onOpenImportLink={() => {
           setTranscribeOpen(false);
@@ -379,7 +435,8 @@ export function DeskShell({ displayName, initial }: Props) {
         }
         onImported={(quota) => {
           applyQuota(quota);
-          void loadAll({ silent: true });
+          setPage(1);
+          void loadAll({ silent: true, page: 1 });
         }}
       />
 
@@ -407,9 +464,8 @@ export function DeskShell({ displayName, initial }: Props) {
         }}
         onDeleted={(id, quota) => {
           setTranscripts((prev) => prev.filter((item) => item.id !== id));
-          // Deleting never restores free daily attempts — trust API quota.
           applyQuota(quota);
-          if (!quota) void loadAll({ silent: true });
+          void loadAll({ silent: true });
         }}
       />
     </div>

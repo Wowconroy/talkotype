@@ -58,13 +58,24 @@ export async function transcribeWithGroq(params: {
     form.append("prompt", params.prompt.slice(0, 800));
   }
 
-  const res = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: form,
-  });
+  let res: Response;
+  try {
+    res = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: form,
+    });
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err);
+    if (/fetch failed|ECONNRESET|ETIMEDOUT|socket/i.test(raw)) {
+      throw new Error(
+        "Could not reach the transcription provider — the file may be too large. Export audio (MP3/M4A) or retry after the media worker is available.",
+      );
+    }
+    throw err instanceof Error ? err : new Error(raw);
+  }
 
   const payload = (await res.json().catch(() => ({}))) as {
     text?: string;

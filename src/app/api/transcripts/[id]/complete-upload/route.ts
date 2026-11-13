@@ -71,18 +71,31 @@ export async function POST(request: Request, { params }: Params) {
     });
   }
 
-  // Fallback: short-file path on Vercel when the Fly worker is not configured.
+  // Fallback: process on Vercel when the Fly worker is not configured.
+  // Videos are audio-extracted (ffmpeg-static) before Groq inside /process.
   const origin = new URL(request.url).origin;
   const cookie = request.headers.get("cookie") ?? "";
 
   after(async () => {
     try {
-      await fetch(`${origin}/api/transcripts/${id}/process`, {
+      const processRes = await fetch(`${origin}/api/transcripts/${id}/process`, {
         method: "POST",
         headers: { cookie },
+        signal: AbortSignal.timeout(290_000),
       });
-    } catch {
-      // Job stays queued; user can retry from the desk.
+      if (!processRes.ok) {
+        const body = await processRes.text().catch(() => "");
+        console.error(
+          "[complete-upload] process failed",
+          processRes.status,
+          body.slice(0, 300),
+        );
+      }
+    } catch (err) {
+      console.error(
+        "[complete-upload] process kickoff error",
+        err instanceof Error ? err.message : err,
+      );
     }
   });
 

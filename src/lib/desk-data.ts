@@ -5,6 +5,12 @@ import type {
   DeskUsage,
 } from "@/components/desk/types";
 import { ensureProfile } from "@/lib/ensure-profile";
+import {
+  DESK_PAGE_SIZE,
+  escapeIlike,
+  paginationFromTotal,
+  type DeskPagination,
+} from "@/lib/desk-pagination";
 import { FREE_DAILY_TRANSCRIPTS } from "@/lib/plan-limits";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -15,6 +21,14 @@ export type DeskBootstrap = {
   usage: DeskUsage;
   folders: DeskFolder[];
   transcripts: DeskTranscript[];
+  pagination: DeskPagination;
+};
+
+export type DeskListQuery = {
+  page?: number;
+  /** Folder id, or null/undefined for Recent (all files). */
+  folderId?: string | null;
+  q?: string;
 };
 
 function utcToday() {
@@ -109,39 +123,26 @@ function mapTranscriptRow(row: TranscriptRow): DeskTranscript {
   } as DeskTranscript;
 }
 
-async function loadTranscripts(
-  admin: ReturnType<typeof createAdminClient>,
-  userId: string,
-): Promise<DeskTranscript[]> {
-  // One round-trip: embed media + active job model via FK.
-  const { data, error } = await admin
-    .from("transcripts")
-    .select(
-      "id, title, status, duration_seconds, requested_language, source_filename, folder_id, source_url, source_kind, created_at, updated_at, content_revision, active_job_id, share_enabled, media_assets(size_bytes, kind, expires_at), active_job:transcription_jobs!active_job_id(model, requested_mode, stage, progress_pct)",
-    )
-    .eq("user_id", userId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(50);
-
-  if (!error && data) {
-    return (data as TranscriptRow[]).map(mapTranscriptRow);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyTranscriptFilters(query: any, opts: DeskListQuery) {
+  let next = query;
+  if (opts.folderId) {
+    next = next.eq("folder_id", opts.folderId);
   }
+  const q = opts.q?.trim();
+  if (q) {
+    const safe = escapeIlike(q);
+    next = next.or(
+      `title.ilike.%${safe}%,source_filename.ilike.%${safe}%,source_url.ilike.%${safe}%`,
+    );
+  }
+  return next;
+}
 
-  // Fallback if the FK embed alias isn't available in this project yet.
-  const { data: rows, error: fallbackError } = await admin
-    .from("transcripts")
-    .select(
-      "id, title, status, duration_seconds, requested_language, source_filename, folder_id, source_url, source_kind, created_at, updated_at, content_revision, active_job_id, share_enabled, media_assets(size_bytes, kind, expires_at)",
-    )
-    .eq("user_id", userId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(50);
-
-  if (fallbackError) throw new Error(fallbackError.message || error?.message);
-
-  const list = (rows ?? []) as TranscriptRow[];
+async function attachJobMeta(
+  admin: ReturnType<typeof createAdminClient>,
+  list: TranscriptRow[],
+): Promise<DeskTranscript[]> {
   const jobIds = list
     .map((row) => row.active_job_id)
     .filter((id): id is string => Boolean(id));
@@ -189,14 +190,94 @@ async function loadTranscripts(
   });
 }
 
+async function loadTranscriptsPage(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  opts: DeskListQuery = {},
+): Promise<{ items: DeskTranscript[]; pagination: DeskPagination }> {
+  const pageSize = DESK_PAGE_SIZE;
+  const requestedPage = Math.max(1, Math.floor(opts.page ?? 1) || 1);
+  const from = (requestedPage - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const selectWithJob =
+    "id, title, status, duration_seconds, requested_language, source_filename, folder_id, source_url, source_kind, created_at, updated_at, content_revision, active_job_id, share_enabled, media_assets(size_bytes, kind, expires_at), active_job:transcription_jobs!active_job_id(model, requested_mode, stage, progress_pct)";
+  const selectPlain =
+    "id, title, status, duration_seconds, requested_language, source_filename, folder_id, source_url, source_kind, created_at, updated_at, content_revision, active_job_id, share_enabled, media_assets(size_bytes, kind, expires_at)";
+
+  // One round-trip: embed media + active job model via FK.
+  let primary = admin
+    .from("transcripts")
+    .select(selectWithJob, { count: "exact" })
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .range(from, to);
+  primary = applyTranscriptFilters(primary, opts);
+
+  const { data, error, count } = await primary;
+
+  if (!error && data) {
+    const total = count ?? data.length;
+    const pagination = paginationFromTotal(total, requestedPage, pageSize);
+    // If the requested page is past the end, re-fetch the last page once.
+    if (pagination.page !== requestedPage && total > 0) {
+      return loadTranscriptsPage(admin, userId, {
+        ...opts,
+        page: pagination.page,
+      });
+    }
+    return {
+      items: (data as TranscriptRow[]).map(mapTranscriptRow),
+      pagination,
+    };
+  }
+
+  // Fallback if the FK embed alias isn't available in this project yet.
+  let fallback = admin
+    .from("transcripts")
+    .select(selectPlain, { count: "exact" })
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .range(from, to);
+  fallback = applyTranscriptFilters(fallback, opts);
+
+  const {
+    data: rows,
+    error: fallbackError,
+    count: fallbackCount,
+  } = await fallback;
+
+  if (fallbackError) {
+    throw new Error(fallbackError.message || error?.message);
+  }
+
+  const list = (rows ?? []) as TranscriptRow[];
+  const total = fallbackCount ?? list.length;
+  const pagination = paginationFromTotal(total, requestedPage, pageSize);
+  if (pagination.page !== requestedPage && total > 0) {
+    return loadTranscriptsPage(admin, userId, {
+      ...opts,
+      page: pagination.page,
+    });
+  }
+
+  return {
+    items: await attachJobMeta(admin, list),
+    pagination,
+  };
+}
+
 export async function loadDeskBootstrap(
   userId: string,
   user?: User | null,
+  listQuery: DeskListQuery = {},
 ): Promise<DeskBootstrap> {
   const admin = createAdminClient();
   const today = utcToday();
 
-  const [profileResult, foldersResult, usageResult, transcripts] =
+  const [profileResult, foldersResult, usageResult, transcriptPage] =
     await Promise.all([
       admin
         .from("profiles")
@@ -214,7 +295,7 @@ export async function loadDeskBootstrap(
         .eq("user_id", userId)
         .eq("usage_date", today)
         .maybeSingle(),
-      loadTranscripts(admin, userId),
+      loadTranscriptsPage(admin, userId, listQuery),
     ]);
 
   if (foldersResult.error) {
@@ -258,6 +339,7 @@ export async function loadDeskBootstrap(
     ownerEmail: (profile.email as string) ?? null,
     usage,
     folders: (foldersResult.data as DeskFolder[]) ?? [],
-    transcripts,
+    transcripts: transcriptPage.items,
+    pagination: transcriptPage.pagination,
   };
 }

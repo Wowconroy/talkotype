@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  extractAudioFile,
+  GROQ_MAX_UPLOAD_BYTES,
+  isFfmpegAvailable,
+  looksLikeVideo,
+} from "@/lib/ffmpeg-local";
+import {
   clipTranscriptToSeconds,
   FREE_TRANSCRIBE_SECONDS,
   normalizePlan,
@@ -47,6 +53,7 @@ export async function POST(_request: Request, { params }: Params) {
       kind: string;
       object_key: string;
       content_type?: string | null;
+      size_bytes?: number | null;
       deleted_at: string | null;
     }>
   )?.find((item) => item.kind === "original" && !item.deleted_at);
@@ -129,6 +136,71 @@ export async function POST(_request: Request, { params }: Params) {
 
     const { bytes, contentType } = await getObjectBytes(media.object_key);
 
+    const filename =
+      transcript.source_filename ||
+      media.object_key.split("/").pop() ||
+      "audio.mp3";
+
+    const { data: ownerProfileEarly } = await admin
+      .from("profiles")
+      .select("plan")
+      .eq("id", user.id)
+      .maybeSingle();
+    const planEarly = normalizePlan(ownerProfileEarly?.plan);
+    const maxSeconds =
+      planEarly === "free" ? FREE_TRANSCRIBE_SECONDS : null;
+
+    const videoLike = looksLikeVideo({
+      filename,
+      contentType: media.content_type || contentType,
+    });
+    const tooBigForGroq =
+      bytes.byteLength > GROQ_MAX_UPLOAD_BYTES ||
+      (typeof media.size_bytes === "number" &&
+        media.size_bytes > GROQ_MAX_UPLOAD_BYTES);
+
+    let audioBytes = bytes;
+    let audioFilename = filename;
+    let audioType = media.content_type || contentType;
+
+    // Videos / oversized uploads must be reduced to mono FLAC before Groq.
+    if (videoLike || tooBigForGroq) {
+      await admin
+        .from("transcription_jobs")
+        .update({
+          progress_pct: 20,
+          stage: "preparing_audio",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transcript.active_job_id);
+
+      if (!(await isFfmpegAvailable())) {
+        throw new Error(
+          "This video needs audio extraction. Export MP3/M4A under 100MB, or deploy the media worker.",
+        );
+      }
+
+      const extracted = await extractAudioFile({
+        sourceBytes: bytes,
+        sourceFilename: filename,
+        maxSeconds,
+      });
+      if (!extracted) {
+        throw new Error(
+          "Could not extract audio from this video. Try exporting MP3/M4A and upload again.",
+        );
+      }
+      audioBytes = extracted.bytes;
+      audioFilename = extracted.filename;
+      audioType = extracted.contentType;
+    }
+
+    if (audioBytes.byteLength > GROQ_MAX_UPLOAD_BYTES) {
+      throw new Error(
+        "Audio is still over the 100MB provider limit after extraction. Split the file or deploy the media worker for chunking.",
+      );
+    }
+
     await admin
       .from("transcription_jobs")
       .update({
@@ -138,19 +210,14 @@ export async function POST(_request: Request, { params }: Params) {
       })
       .eq("id", transcript.active_job_id);
 
-    const filename =
-      transcript.source_filename ||
-      media.object_key.split("/").pop() ||
-      "audio.mp3";
-
     const quality = qualityForMode(
       (job?.requested_mode as string | null | undefined) ?? null,
     );
 
     const normalised = await transcribeAudio({
-      bytes,
-      filename,
-      contentType: media.content_type || contentType,
+      bytes: audioBytes,
+      filename: audioFilename,
+      contentType: audioType,
       model: job?.model,
       language: transcript.requested_language,
       quality,
@@ -163,14 +230,8 @@ export async function POST(_request: Request, { params }: Params) {
       segments: normalised.segments,
     };
 
-    const { data: ownerProfile } = await admin
-      .from("profiles")
-      .select("plan")
-      .eq("id", user.id)
-      .maybeSingle();
-    const plan = normalizePlan(ownerProfile?.plan);
     const result =
-      plan === "free"
+      planEarly === "free"
         ? clipTranscriptToSeconds(rawResult, FREE_TRANSCRIBE_SECONDS)
         : { ...rawResult, clipped: false };
 
