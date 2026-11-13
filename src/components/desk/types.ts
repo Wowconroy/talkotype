@@ -66,6 +66,7 @@ const STAGE_LABELS: Record<string, string> = {
   queued: "Queued",
   uploading: "Uploading",
   preparing_audio: "Preparing audio",
+  chunking: "Splitting audio",
   transcribing: "Transcribing",
   publishing: "Finalising",
   awaiting_source: "Waiting for source",

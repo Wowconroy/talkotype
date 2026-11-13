@@ -1,39 +1,76 @@
-# Smallest setup for a real two-hour MP4
+# Long-file processing (Fly FFmpeg worker)
 
-## What already covers the flow
+## Decision
 
-Reuse these as-is:
+Talkotype keeps Next.js on Vercel for the app, and runs **media work on Fly.io** with native FFmpeg.
 
-- `transcription_jobs` (`status`, `stage`, `progress_pct`, `attempt_count`, `request_key`)
-- `transcription_chunks` (per-chunk retry + offsets)
-- `publish_job_transcript` (guard against overwriting newer edits)
-- Desk polling of `job_stage` / `progress_pct`
-- R2 private originals + Groq Whisper via `transcription-provider`
+Why Fly (not CF Queues/Containers first):
 
-Keep **one Groq mode** for the long-file path initially: **Steady → `whisper-large-v3-turbo`**.
+- Native FFmpeg without fighting Worker/WASM limits
+- Long CPU time for 2–3 hour files
+- Simple HTTP dispatch + DB poll backup
+- R2 + Supabase stay as storage/state; worker is replaceable
 
-## Smallest add
+**One Groq mode for this path:** Steady → `whisper-large-v3-turbo`.
 
-1. **Worker with FFmpeg** (Cloudflare Container, Fly, or a small Node/Python service) triggered from `complete-upload` instead of (or after) the Vercel `after()` process route.
-2. Worker steps with visible stages:
-   - `preparing_audio` — probe duration/codecs; reject > 3h; extract mono 16 kHz FLAC/WAV
-   - `chunking` — split ~8–10 min with short overlaps; write `transcription_chunks`
-   - `transcribing` — Groq each chunk (URL or file); bounded retries on 429/5xx
-   - `publishing` — merge by timeline, drop duplicated boundary text; `publish_job_transcript`
-3. **Do not require CF Queues yet** if the worker can pull `queued` jobs every few seconds. Add Queues when Vercel timeouts or duplicate dispatches become the bottleneck.
-4. Progress: `progress_pct = completed_chunks / total_chunks`.
+## What reuses existing infra
 
-## Still separate tasks (not in this minimal path)
+- `transcription_jobs` stages / progress
+- `transcription_chunks` for independent retries
+- `publish_job_transcript` edit guard
+- Desk polling of stage + progress
+- Private R2 originals + extracted audio
+
+## Flow
+
+1. Browser uploads to R2 → `POST /complete-upload`
+2. If `TRANSCRIPTION_WORKER_URL` + `TRANSCRIPTION_WORKER_SECRET` are set → `POST {worker}/jobs/:transcriptId`
+3. Worker: probe → enforce 3h (Unlimited) / 30m clip (Free) → extract mono 16 kHz FLAC → chunk ~8 min with 2s overlap → Groq each chunk → merge → publish
+4. If worker env is missing → existing Vercel `after()` + `/process` (short files only)
+
+## Local worker
+
+```bash
+cd worker
+cp ../.env.local .env.local   # or use docker-compose env_file
+export WORKER_SHARED_SECRET=dev-worker-secret
+npm install
+# needs ffmpeg/ffprobe on PATH
+npm run dev
+```
+
+Or: `docker compose -f worker/docker-compose.yml up --build`
+
+App `.env.local`:
+
+```
+TRANSCRIPTION_WORKER_URL=http://127.0.0.1:8080
+TRANSCRIPTION_WORKER_SECRET=dev-worker-secret
+```
+
+## Deploy to Fly
+
+```bash
+cd worker
+fly launch --copy-config --name talkotype-worker
+fly secrets set \
+  WORKER_SHARED_SECRET=... \
+  GROQ_API_KEY=... \
+  NEXT_PUBLIC_SUPABASE_URL=... \
+  SUPABASE_SERVICE_ROLE_KEY=... \
+  R2_ACCOUNT_ID=... \
+  R2_ACCESS_KEY_ID=... \
+  R2_SECRET_ACCESS_KEY=... \
+  R2_BUCKET_NAME=... \
+  TRANSCRIPTION_MODEL=whisper-large-v3-turbo
+fly deploy
+```
+
+Then set the same URL/secret on Vercel.
+
+## Separate later
 
 - Resumable multipart R2 uploads
-- AssemblyAI / speaker recognition
-- Swift vs Steady accuracy benchmarks
-
-## What blocks long-file support today
-
-| Blocker | Why |
-|---|---|
-| No FFmpeg runtime | Cannot extract audio from MP4 or normalise WMA/WMV |
-| No chunking | Groq upload caps (25–100 MB) and Vercel `maxDuration` |
-| Process runs in request/`after()` | Unreliable for multi-hour jobs |
-| No duration probe | 3h limit is advertised, not enforced on bytes |
+- Speaker recognition
+- Swift vs Steady WER benchmarks
+- Cloudflare Queues (only if dispatch reliability needs it)

@@ -1,0 +1,19 @@
+export function requireEnv(name: string) {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is not configured`);
+  return value;
+}
+
+export const config = {
+  port: Number(process.env.PORT || 8080),
+  sharedSecret: process.env.WORKER_SHARED_SECRET?.trim() || "",
+  /** Steady / one Groq mode for long-file path. */
+  model: process.env.TRANSCRIPTION_MODEL || "whisper-large-v3-turbo",
+  chunkSeconds: Number(process.env.CHUNK_SECONDS || 480),
+  overlapSeconds: Number(process.env.CHUNK_OVERLAP_SECONDS || 2),
+  maxAttempts: Number(process.env.CHUNK_MAX_ATTEMPTS || 3),
+  /** Product target — reject above this. */
+  maxFileSeconds: Number(process.env.UNLIMITED_MAX_SECONDS || 3 * 60 * 60),
+  freeClipSeconds: Number(process.env.FREE_TRANSCRIBE_SECONDS || 30 * 60),
+  pollMs: Number(process.env.WORKER_POLL_MS || 15_000),
+};

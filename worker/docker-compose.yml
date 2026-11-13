@@ -1,0 +1,14 @@
+services:
+  worker:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - ../.env.local
+    environment:
+      PORT: "8080"
+      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-dev-worker-secret}
+      TRANSCRIPTION_MODEL: whisper-large-v3-turbo
+      CHUNK_SECONDS: "480"
+      CHUNK_OVERLAP_SECONDS: "2"
+      WORKER_POLL_MS: "15000"

@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --import tsx --test src/lib/*.test.ts",
-    "smoke:transcribe": "node --import tsx --env-file=.env.local scripts/live-transcribe-smoke.ts"
+    "smoke:transcribe": "node --import tsx --env-file=.env.local scripts/live-transcribe-smoke.ts",
+    "worker:dev": "npm --prefix worker run dev",
+    "worker:install": "npm --prefix worker install"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1168.0",
