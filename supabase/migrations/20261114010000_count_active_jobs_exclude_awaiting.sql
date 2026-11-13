@@ -1,5 +1,8 @@
--- Stuck link stubs (awaiting_source) must not consume concurrency slots
--- or look "active" forever after the old pre-ingest pipeline.
+-- App writes human-readable errors onto jobs; schema originally only had error_code.
+alter table public.transcription_jobs
+  add column if not exists error_message text;
+
+-- Stuck link stubs (awaiting_source) must not consume concurrency slots.
 create or replace function public.count_active_jobs(p_user_id uuid)
 returns integer
 language sql
@@ -34,6 +37,8 @@ where j.stage = 'awaiting_source'
 update public.transcripts t
 set
   status = 'failed',
+  error_message =
+    'Link import was queued before ingest shipped. Delete this row or re-import the URL.',
   updated_at = now()
 where t.source_kind = 'link'
   and t.status in ('queued', 'processing')
