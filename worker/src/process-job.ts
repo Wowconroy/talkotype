@@ -144,6 +144,8 @@ export async function processTranscript(transcriptId: string) {
       object_key: extractedKey,
       content_type: "audio/flac",
       size_bytes: audioBytes.byteLength,
+      // Follow the original's retention window (free = 7 days).
+      expires_at: media.expires_at ?? null,
       status: "active",
     });
 

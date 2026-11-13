@@ -25,7 +25,9 @@ Project: `talkotype` (`lmygcgwaknzdrikoizwo`)
    - `R2_SECRET_ACCESS_KEY`
    - `R2_BUCKET_NAME`
 
-Original uploads get a 7-day `expires_at` in `media_assets`. TXT export uses `transcripts.transcript_text` and still works after media expiry.
+Original uploads get a 7-day `expires_at` in `media_assets` on Free (Unlimited = `null`). TXT export uses `transcripts.transcript_text` and still works after media expiry.
+
+**Automated purge:** Vercel Cron hits `GET /api/cron/purge-expired-media` daily (`15 3 * * *` UTC in `vercel.json`). It deletes expired objects from R2 and marks `media_assets` as `status=expired` + `deleted_at`. Set `CRON_SECRET` in the Vercel project; Vercel sends `Authorization: Bearer <CRON_SECRET>`.
 
 R2 CORS (required for browser PUT to signed URLs): allow origins `https://talkotype.app`, `http://localhost:3000`; methods `GET,PUT,HEAD`; headers `*`.
 
