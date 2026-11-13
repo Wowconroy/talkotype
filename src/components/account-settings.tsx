@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, InfinityIcon } from "lucide-react";
@@ -10,7 +11,15 @@ import {
   setCachedDisplayName,
 } from "@/lib/display-name";
 import { createClient } from "@/lib/supabase/client";
-import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
+import type { AccountBootstrapPayload } from "@/lib/account-data";
+
+const PaddleCheckoutButton = dynamic(
+  () =>
+    import("@/components/paddle-checkout-button").then(
+      (m) => m.PaddleCheckoutButton,
+    ),
+  { ssr: false },
+);
 
 const FREE_DAILY_LIMIT = 3;
 
@@ -63,37 +72,31 @@ function Toggle({
   );
 }
 
-function mapAccountPayload(payload: {
-  profile: {
+function mapAccountPayload(payload: AccountBootstrapPayload): AccountView {
+  const profile = payload.profile as {
     email: string;
     display_name?: string | null;
     provider?: string;
     plan?: string;
     billing_interval?: string;
   };
-  notifications: {
-    completed_transcripts: boolean;
-    free_quota_resets: boolean;
-    product_updates: boolean;
-  };
-  dailyUsage: { transcripts_used: number };
-  invoices: Array<{
+  const invoices = payload.invoices as Array<{
     id: string;
     label?: string | null;
     amount_cents: number;
     currency: string;
     invoice_url?: string | null;
   }>;
-}): AccountView {
+
   return {
-    email: payload.profile.email,
-    name: payload.profile.display_name || payload.profile.email.split("@")[0],
-    provider: payload.profile.provider === "google" ? "google" : "email",
-    plan: payload.profile.plan === "unlimited" ? "unlimited" : "free",
+    email: profile.email,
+    name: profile.display_name || profile.email.split("@")[0],
+    provider: profile.provider === "google" ? "google" : "email",
+    plan: profile.plan === "unlimited" ? "unlimited" : "free",
     billingInterval:
-      payload.profile.billing_interval === "yearly" ||
-      payload.profile.billing_interval === "monthly"
-        ? payload.profile.billing_interval
+      profile.billing_interval === "yearly" ||
+      profile.billing_interval === "monthly"
+        ? profile.billing_interval
         : "none",
     dailyUsed: payload.dailyUsage.transcripts_used ?? 0,
     notifications: {
@@ -101,7 +104,7 @@ function mapAccountPayload(payload: {
       freeQuotaResets: payload.notifications.free_quota_resets,
       productUpdates: payload.notifications.product_updates,
     },
-    invoices: (payload.invoices ?? []).map((invoice) => ({
+    invoices: (invoices ?? []).map((invoice) => ({
       id: invoice.id,
       label: invoice.label || "Invoice",
       amountLabel: `${(invoice.amount_cents / 100).toLocaleString("en-US", {
@@ -113,14 +116,21 @@ function mapAccountPayload(payload: {
   };
 }
 
-export function AccountSettings() {
+export function AccountSettings({
+  initial,
+}: {
+  initial?: AccountBootstrapPayload;
+}) {
   const router = useRouter();
-  const [user, setUser] = useState<TalkotypeUser | null>(null);
-  const [account, setAccount] = useState<AccountView | null>(null);
-  const [ready, setReady] = useState(false);
+  const initialMapped = initial ? mapAccountPayload(initial) : null;
+  const initialUserId =
+    typeof initial?.profile?.id === "string" ? initial.profile.id : null;
+  const [userId, setUserId] = useState<string | null>(initialUserId);
+  const [account, setAccount] = useState<AccountView | null>(initialMapped);
+  const [ready, setReady] = useState(Boolean(initialMapped));
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [nameDraft, setNameDraft] = useState("");
+  const [nameDraft, setNameDraft] = useState(initialMapped?.name ?? "");
   const [savingName, setSavingName] = useState(false);
   const [portalBusy, setPortalBusy] = useState(false);
 
@@ -130,25 +140,27 @@ export function AccountSettings() {
       router.replace("/login?next=/account");
       return;
     }
-    setUser(session);
-    const cachedName = resolveDisplayName(session.id, session.name);
-    // Paint shell immediately with cached profile name (no email flash).
-    const shell: AccountView = {
-      email: session.email,
-      name: cachedName,
-      provider: session.provider,
-      plan: "free",
-      billingInterval: "none",
-      dailyUsed: 0,
-      notifications: {
-        completedTranscripts: true,
-        freeQuotaResets: true,
-        productUpdates: true,
-      },
-      invoices: [],
-    };
-    setAccount(shell);
-    setNameDraft(shell.name);
+    setUserId(session.id);
+    setAccount((prev) => {
+      if (prev) return prev;
+      const cachedName = resolveDisplayName(session.id, session.name);
+      const shell: AccountView = {
+        email: session.email,
+        name: cachedName,
+        provider: session.provider,
+        plan: "free",
+        billingInterval: "none",
+        dailyUsed: 0,
+        notifications: {
+          completedTranscripts: true,
+          freeQuotaResets: true,
+          productUpdates: true,
+        },
+        invoices: [],
+      };
+      setNameDraft(shell.name);
+      return shell;
+    });
     setReady(true);
 
     const res = await fetch("/api/account", { credentials: "same-origin" });
@@ -156,7 +168,7 @@ export function AccountSettings() {
       setError("Could not load account.");
       return;
     }
-    const payload = await res.json();
+    const payload = (await res.json()) as AccountBootstrapPayload;
     const mapped = mapAccountPayload(payload);
     setCachedDisplayName(session.id, mapped.name);
     setAccount(mapped);
@@ -164,21 +176,36 @@ export function AccountSettings() {
   }
 
   useEffect(() => {
-    void load().then(() => {
+    const checkUpgradeBanner = () => {
       if (typeof window === "undefined") return;
       const params = new URLSearchParams(window.location.search);
-      if (params.get("upgraded") === "1") {
-        setMessage(
-          "Thanks — if Paddle confirms the payment, Unlimited unlocks within a few seconds. Refresh if the plan hasn’t flipped yet.",
-        );
-        window.history.replaceState({}, "", "/account");
-        // Webhook may land just after redirect — re-fetch once.
-        window.setTimeout(() => void load(), 2500);
-      }
-    });
+      if (params.get("upgraded") !== "1") return;
+      setMessage(
+        "Thanks — if Paddle confirms the payment, Unlimited unlocks within a few seconds. Refresh if the plan hasn’t flipped yet.",
+      );
+      window.history.replaceState({}, "", "/account");
+      window.setTimeout(() => void load(), 2500);
+    };
+
+    if (initialMapped) {
+      void getSessionUser().then((session) => {
+        if (!session) {
+          router.replace("/login?next=/account");
+          return;
+        }
+        setUserId(session.id);
+        setCachedDisplayName(session.id, initialMapped.name);
+      });
+      checkUpgradeBanner();
+      return;
+    }
+
+    void load().then(checkUpgradeBanner);
+    // SSR initial paint — only client-fetch when no server bootstrap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  if (!ready || !user || !account) {
+  if (!ready || !account) {
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-20 text-sm text-muted-foreground">
         Loading your settings…
@@ -190,7 +217,9 @@ export function AccountSettings() {
   const limit = account.plan === "free" ? FREE_DAILY_LIMIT : null;
   const progress =
     limit && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 100;
-  const initial = (account.name || account.email || "T").slice(0, 1).toUpperCase();
+  const avatarLetter = (account.name || account.email || "T")
+    .slice(0, 1)
+    .toUpperCase();
 
   async function openBillingPortal() {
     setPortalBusy(true);
@@ -245,7 +274,7 @@ export function AccountSettings() {
     const name =
       payload.profile?.display_name ||
       next;
-    if (user) setCachedDisplayName(user.id, name);
+    if (userId) setCachedDisplayName(userId, name);
     setAccount({ ...account, name });
     setNameDraft(name);
     setMessage("Name updated.");
@@ -394,7 +423,7 @@ export function AccountSettings() {
             <div className="mt-3 rounded-2xl bg-mist px-4 py-4">
               <div className="flex items-center gap-3">
                 <span className="grid size-11 place-items-center rounded-xl bg-coral font-display text-lg font-semibold text-white">
-                  {initial}
+                  {avatarLetter}
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-ink">

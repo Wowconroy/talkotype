@@ -1,18 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Upload } from "lucide-react";
 import { DeskSidebar } from "./desk-sidebar";
-import {
-  FolderModal,
-  type FolderModalMode,
-} from "./folder-modal";
-import { ImportLinkModal } from "./import-link-modal";
-import { TranscribeModal } from "./transcribe-modal";
-import {
-  TranscriptActionModals,
-  type TranscriptDialog,
-} from "./transcript-action-modals";
+import type { FolderModalMode } from "./folder-modal";
+import type { TranscriptDialog } from "./transcript-action-modals";
 import { TranscriptsTable } from "./transcripts-table";
 import type {
   DeskFolder,
@@ -20,6 +13,24 @@ import type {
   DeskUsage,
   QuotaSnapshot,
 } from "./types";
+
+const FolderModal = dynamic(
+  () => import("./folder-modal").then((m) => m.FolderModal),
+  { ssr: false },
+);
+const ImportLinkModal = dynamic(
+  () => import("./import-link-modal").then((m) => m.ImportLinkModal),
+  { ssr: false },
+);
+const TranscribeModal = dynamic(
+  () => import("./transcribe-modal").then((m) => m.TranscribeModal),
+  { ssr: false },
+);
+const TranscriptActionModals = dynamic(
+  () =>
+    import("./transcript-action-modals").then((m) => m.TranscriptActionModals),
+  { ssr: false },
+);
 
 type DeskInitial = {
   transcripts: DeskTranscript[];

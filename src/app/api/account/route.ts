@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
-import { reconcileFreeQuotaForUser } from "@/lib/desk-data";
+import { loadAccountBootstrap } from "@/lib/account-data";
 import { ensureProfile } from "@/lib/ensure-profile";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-function utcToday() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export async function GET() {
   const { user } = await requireUser();
@@ -14,63 +10,18 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const admin = createAdminClient();
-  const today = utcToday();
-
-  const [
-    { data: existingProfile },
-    { data: notifications },
-    { data: invoices },
-  ] = await Promise.all([
-    admin.from("profiles").select("*").eq("id", user.id).maybeSingle(),
-    admin
-      .from("notification_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-    admin
-      .from("invoices")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20),
-  ]);
-
-  let profile = existingProfile;
-  if (!profile) {
-    try {
-      profile = await ensureProfile(user);
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error:
-            error instanceof Error ? error.message : "Could not sync profile.",
-        },
-        { status: 500 },
-      );
-    }
+  try {
+    const payload = await loadAccountBootstrap(user.id, user);
+    return NextResponse.json(payload);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Could not load account.",
+      },
+      { status: 500 },
+    );
   }
-
-  const plan = profile?.plan ?? "free";
-  const dailyUsage =
-    plan === "free"
-      ? await reconcileFreeQuotaForUser(user.id)
-      : {
-          transcripts_used: 0,
-          usage_date: today,
-          limit: null as number | null,
-        };
-
-  return NextResponse.json({
-    profile,
-    notifications: notifications ?? {
-      completed_transcripts: true,
-      free_quota_resets: true,
-      product_updates: true,
-    },
-    dailyUsage,
-    invoices: invoices ?? [],
-  });
 }
 
 export async function PATCH(request: Request) {
