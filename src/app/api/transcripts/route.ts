@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -7,6 +7,12 @@ import {
   isR2Configured,
 } from "@/lib/r2";
 import { reconcileFreeQuotaForUser } from "@/lib/desk-data";
+import { ingestLinkTranscript } from "@/lib/ingest-link-transcript";
+import {
+  classifyLinkHost,
+  LinkIngestError,
+  assertPublicHttpUrl,
+} from "@/lib/link-ingest";
 import {
   FREE_DAILY_TRANSCRIPTS,
   mediaExpiresAt,
@@ -224,17 +230,30 @@ export async function POST(request: Request) {
   }
 
   if (isLinkImport) {
-    try {
-      const parsed = new URL(sourceUrl!);
-      if (!["http:", "https:"].includes(parsed.protocol)) {
-        return NextResponse.json(
-          { error: "sourceUrl must be http(s)" },
-          { status: 400 },
-        );
-      }
-    } catch {
+    if (!isR2Configured()) {
       return NextResponse.json(
-        { error: "Invalid sourceUrl" },
+        {
+          error:
+            "Cloudflare R2 is not configured. Add R2_* env vars to enable link import.",
+        },
+        { status: 503 },
+      );
+    }
+    try {
+      await assertPublicHttpUrl(sourceUrl!);
+    } catch (err) {
+      const message =
+        err instanceof LinkIngestError || err instanceof Error
+          ? err.message
+          : "Invalid sourceUrl";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+    if (classifyLinkHost(sourceUrl!) === "youtube") {
+      return NextResponse.json(
+        {
+          error:
+            "YouTube links are not downloadable here yet. Download the audio/video and upload the file, or paste a direct MP3/MP4 URL (Drive/Dropbox public links work).",
+        },
         { status: 400 },
       );
     }
@@ -404,7 +423,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // Link import: store URL as pending — no R2 / media / processing yet.
+  // Link import: create job, then download → R2 → process in the background.
   if (isLinkImport) {
     const { data: job, error: jobError } = await insertTranscriptionJob(admin, {
       transcript_id: transcriptId,
@@ -416,14 +435,13 @@ export async function POST(request: Request) {
       prefer_timestamps: preferTimestamps,
       transcribe_to_english: transcribeToEnglish,
       status: "queued",
-      stage: "awaiting_source",
-      progress_pct: 0,
+      stage: "downloading",
+      progress_pct: 5,
       speakers_requested: speakersRequested,
       speakers_expected: speakersExpected,
       attempt_count: 0,
       request_key: requestKey,
       source_content_revision: transcript.content_revision ?? 0,
-      error_message: "Link import queued — media ingest coming soon.",
     });
 
     if (jobError || !job) {
@@ -440,10 +458,45 @@ export async function POST(request: Request) {
       .update({ active_job_id: job.id })
       .eq("id", transcriptId);
 
+    const origin = new URL(request.url).origin;
+    const cookie = request.headers.get("cookie") ?? "";
+
+    after(async () => {
+      try {
+        await ingestLinkTranscript({
+          transcriptId,
+          userId: user.id,
+          processKick: async (id) => {
+            const processRes = await fetch(
+              `${origin}/api/transcripts/${id}/process`,
+              {
+                method: "POST",
+                headers: { cookie },
+                signal: AbortSignal.timeout(290_000),
+              },
+            );
+            if (!processRes.ok) {
+              const body = await processRes.text().catch(() => "");
+              console.error(
+                "[link-import] process failed",
+                processRes.status,
+                body.slice(0, 300),
+              );
+            }
+          },
+        });
+      } catch (err) {
+        console.error(
+          "[link-import] ingest error",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    });
+
     return NextResponse.json({
       reused: false,
       requestKey,
-      linkPending: true,
+      linkImport: true,
       transcript: { ...transcript, active_job_id: job.id },
       job,
       quota: quotaPayload(quota, profile?.plan),

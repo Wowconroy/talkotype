@@ -139,8 +139,9 @@ export function ImportLinkModal({
               Import from link
             </h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Paste a direct public media URL (MP3, MP4, and similar). YouTube,
-              Drive, and Dropbox download pipelines are not live yet.
+              Paste a public direct media URL, or a public Google Drive /
+              Dropbox share. We download it (up to 200 MB via link) and
+              transcribe. YouTube is not supported yet — upload the file instead.
             </p>
           </div>
           <button
@@ -166,21 +167,26 @@ export function ImportLinkModal({
                 <ArrowLeft className="size-4 text-sea" />
                 Upload files
               </button>
-              {["YouTube", "Google Drive", "Dropbox", "Direct URL"].map(
-                (label) => (
-                  <span
-                    key={label}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                      label === "Direct URL"
-                        ? "bg-sea/15 text-ink"
-                        : "bg-mist text-muted-foreground"
-                    }`}
-                  >
-                    {label}
-                    {label !== "Direct URL" ? " · soon" : ""}
-                  </span>
-                ),
-              )}
+              {(
+                [
+                  { label: "Direct URL", live: true },
+                  { label: "Google Drive", live: true },
+                  { label: "Dropbox", live: true },
+                  { label: "YouTube", live: false },
+                ] as const
+              ).map((item) => (
+                <span
+                  key={item.label}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                    item.live
+                      ? "bg-sea/15 text-ink"
+                      : "bg-mist text-muted-foreground"
+                  }`}
+                >
+                  {item.label}
+                  {item.live ? "" : " · soon"}
+                </span>
+              ))}
             </div>
 
             <label className="mt-5 block">

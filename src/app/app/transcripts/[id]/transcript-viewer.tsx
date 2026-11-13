@@ -328,6 +328,23 @@ export function TranscriptViewer({ id }: { id: string }) {
 
   async function retryProcess() {
     setError(null);
+    // Link imports may still need the download → R2 step before /process.
+    if (row?.source_kind === "link") {
+      const ingest = await fetch(`/api/transcripts/${id}/ingest-link`, {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const ingestData = await ingest.json().catch(() => ({}));
+      if (!ingest.ok) {
+        setError(
+          (ingestData as { error?: string }).error ||
+            "Could not import that link",
+        );
+        return;
+      }
+      await loadTranscript();
+      return;
+    }
     const res = await fetch(`/api/transcripts/${id}/process`, {
       method: "POST",
       credentials: "same-origin",
