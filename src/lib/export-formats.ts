@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 export type ExportFormat = "txt" | "pdf" | "docx" | "csv" | "srt" | "vtt";
 
 export type ExportSegment = {
@@ -135,59 +138,119 @@ export function buildVtt(input: ExportInput) {
   return `WEBVTT\n\n${body}`;
 }
 
-/** Minimal single-page PDF with Helvetica text lines. */
-export function buildPdf(input: ExportInput): Uint8Array {
-  const lines = buildTxt(input).split(/\n/);
-  const escaped = lines.map((line) =>
-    line
-      .slice(0, 110)
-      .replace(/\\/g, "\\\\")
-      .replace(/\(/g, "\\(")
-      .replace(/\)/g, "\\)"),
-  );
+let cachedNotoSans: Buffer | null = null;
 
-  const contentLines = [
-    "BT",
-    "/F1 11 Tf",
-    "50 780 Td",
-    "14 TL",
-    `(${(input.title || "Transcript").replace(/[\\()]/g, "")}) Tj`,
-    "T*",
-    "T*",
-  ];
-  for (const line of escaped) {
-    contentLines.push(`(${line || " "}) Tj`, "T*");
+function loadNotoSans(): Buffer {
+  if (!cachedNotoSans) {
+    cachedNotoSans = readFileSync(
+      join(process.cwd(), "assets/fonts/NotoSans-Regular.ttf"),
+    );
   }
-  contentLines.push("ET");
-  const stream = contentLines.join("\n");
+  return cachedNotoSans;
+}
 
-  const objects: string[] = [];
-  objects.push("1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n");
-  objects.push("2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj\n");
-  objects.push(
-    "3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>endobj\n",
-  );
-  objects.push(
-    `4 0 obj<< /Length ${stream.length} >>stream\n${stream}\nendstream\nendobj\n`,
-  );
-  objects.push(
-    "5 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj\n",
-  );
+/** Unicode PDF with embedded Noto Sans (Cyrillic / Latin / Greek). */
+export async function buildPdf(input: ExportInput): Promise<Uint8Array> {
+  const { PDFDocument, rgb } = await import("pdf-lib");
+  const fontkit = (await import("@pdf-lib/fontkit")).default;
 
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-  for (const obj of objects) {
-    offsets.push(Buffer.byteLength(pdf, "utf8"));
-    pdf += obj;
-  }
-  const xref = Buffer.byteLength(pdf, "utf8");
-  pdf += `xref\n0 ${objects.length + 1}\n`;
-  pdf += "0000000000 65535 f \n";
-  for (let i = 1; i < offsets.length; i++) {
-    pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
-  }
-  pdf += `trailer<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-  return new TextEncoder().encode(pdf);
+  const pdfDoc = await PDFDocument.create();
+  pdfDoc.registerFontkit(fontkit);
+  const font = await pdfDoc.embedFont(loadNotoSans(), { subset: true });
+
+  const pageWidth = 612;
+  const pageHeight = 792;
+  const margin = 50;
+  const maxWidth = pageWidth - margin * 2;
+  const bodySize = 11;
+  const titleSize = 16;
+  const bodyLeading = 16;
+  const titleLeading = 22;
+  const ink = rgb(0.12, 0.14, 0.16);
+
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  const ensureSpace = (needed: number) => {
+    if (y < margin + needed) {
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      y = pageHeight - margin;
+    }
+  };
+
+  const drawWrapped = (text: string, size: number, leading: number) => {
+    const paragraphs = text.split(/\n/);
+    for (const para of paragraphs) {
+      if (!para.trim()) {
+        y -= leading * 0.45;
+        continue;
+      }
+
+      const tokens = para.split(/(\s+)/);
+      let line = "";
+
+      const flush = () => {
+        const drawn = line.replace(/\s+$/, "");
+        if (!drawn) {
+          line = "";
+          return;
+        }
+        ensureSpace(size);
+        page.drawText(drawn, {
+          x: margin,
+          y,
+          size,
+          font,
+          color: ink,
+        });
+        y -= leading;
+        line = "";
+      };
+
+      for (const token of tokens) {
+        if (!token) continue;
+        const candidate = line + token;
+        if (
+          line &&
+          !/^\s+$/.test(token) &&
+          font.widthOfTextAtSize(candidate, size) > maxWidth
+        ) {
+          flush();
+          line = token.replace(/^\s+/, "");
+          // Hard-break overlong tokens (URLs, etc.)
+          while (font.widthOfTextAtSize(line, size) > maxWidth && line.length > 1) {
+            let cut = line.length - 1;
+            while (
+              cut > 1 &&
+              font.widthOfTextAtSize(line.slice(0, cut), size) > maxWidth
+            ) {
+              cut -= 1;
+            }
+            ensureSpace(size);
+            page.drawText(line.slice(0, cut), {
+              x: margin,
+              y,
+              size,
+              font,
+              color: ink,
+            });
+            y -= leading;
+            line = line.slice(cut);
+          }
+        } else {
+          line = candidate;
+        }
+      }
+      flush();
+    }
+  };
+
+  drawWrapped(input.title || "Transcript", titleSize, titleLeading);
+  y -= 10;
+  drawWrapped(buildTxt(input), bodySize, bodyLeading);
+
+  const saved = await pdfDoc.save();
+  return saved;
 }
 
 /** Minimal DOCX (OOXML) with plain paragraphs. */
@@ -235,10 +298,10 @@ function escapeXml(s: string) {
     .replace(/"/g, "&quot;");
 }
 
-export function buildFormat(
+export async function buildFormat(
   format: ExportFormat,
   input: ExportInput,
-): Uint8Array | string {
+): Promise<Uint8Array | string> {
   switch (format) {
     case "txt":
       return buildTxt(input);

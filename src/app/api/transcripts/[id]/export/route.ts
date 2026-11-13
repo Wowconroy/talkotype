@@ -94,7 +94,7 @@ export async function GET(request: Request, { params }: Params) {
 
   if (formats.length === 1) {
     const format = formats[0];
-    const body = buildFormat(format, input);
+    const body = await buildFormat(format, input);
     const bytes =
       typeof body === "string" ? new TextEncoder().encode(body) : body;
     const filename = filenameFor(data.title || "transcript", format);
@@ -106,13 +106,15 @@ export async function GET(request: Request, { params }: Params) {
     });
   }
 
-  const files = formats.map((format) => {
-    const body = buildFormat(format, input);
-    return {
-      name: filenameFor(data.title || "transcript", format),
-      data: body,
-    };
-  });
+  const files = await Promise.all(
+    formats.map(async (format) => {
+      const body = await buildFormat(format, input);
+      return {
+        name: filenameFor(data.title || "transcript", format),
+        data: body,
+      };
+    }),
+  );
   const zip = zipStore(files);
   const zipName = `${(data.title || "transcript").replace(/[^\w.-]+/g, "_")}_export.zip`;
   return new NextResponse(Buffer.from(zip), {
