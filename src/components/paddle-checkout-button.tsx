@@ -54,7 +54,7 @@ export function PaddleCheckoutButton({
 
       if (!process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN?.trim() || !priceId) {
         throw new Error(
-          "Paddle sandbox is not configured yet. Add client token + price ids.",
+          "Paddle checkout is not configured yet. Add client token + price ids.",
         );
       }
 

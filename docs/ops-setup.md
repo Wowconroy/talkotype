@@ -31,11 +31,13 @@ Original uploads get a 7-day `expires_at` in `media_assets` on Free (Unlimited =
 
 R2 CORS (required for browser PUT to signed URLs): allow origins `https://talkotype.app`, `http://localhost:3000`; methods `GET,PUT,HEAD`; headers `*`.
 
-## 3. Paddle Billing (sandbox first)
+## 3. Paddle Billing
 
-Use a **sandbox** vendor account so test cards never charge real money.
+Sandbox and **live** are separate Paddle accounts. Credentials, products, prices, and webhooks are **not** shared — recreate everything in live when you go to real charges.
 
-### Dashboard setup
+Official checklist: [Go-live checklist](https://developer.paddle.com/build/go-live-checklist/).
+
+### 3a. Sandbox (test cards, no real money)
 
 1. Sign up / log in at [sandbox-vendors.paddle.com](https://sandbox-vendors.paddle.com)
 2. **Catalog → Products** → create product `Talkotype Unlimited`
@@ -43,9 +45,9 @@ Use a **sandbox** vendor account so test cards never charge real money.
    - Monthly · `$20 USD` / month
    - Yearly · `$168 USD` / year (or `$14/mo` billed yearly)
 4. **Developer tools → Authentication**
-   - Create a **client-side token** → `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`
-   - Create an **API key** → `PADDLE_API_KEY`
-5. **Developer tools → Notifications**
+   - Create a **client-side token** → `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` (starts with `test_`)
+   - Create an **API key** → `PADDLE_API_KEY` (contains `_sdbx`)
+5. **Developer tools → Notifications** (or **Events → Notifications**)
    - Destination URL: `https://talkotype.app/api/billing/paddle-webhook`
    - Events (minimum):
      - `subscription.created`
@@ -56,26 +58,61 @@ Use a **sandbox** vendor account so test cards never charge real money.
      - `transaction.paid`
    - Copy the destination **secret key** → `PADDLE_WEBHOOK_SECRET`
 
-### Env vars (`.env.local` + Vercel Production / Preview)
-
 ```bash
 NEXT_PUBLIC_PADDLE_ENV=sandbox
 NEXT_PUBLIC_PADDLE_CLIENT_TOKEN=test_...
 NEXT_PUBLIC_PADDLE_PRICE_MONTHLY=pri_...
 NEXT_PUBLIC_PADDLE_PRICE_YEARLY=pri_...
-PADDLE_API_KEY=test_...
+PADDLE_API_KEY=..._sdbx_...
 PADDLE_WEBHOOK_SECRET=pdl_ntfset_...
 ```
 
 Checkout opens from `/pricing` and Account → **Go Unlimited**. Overlay passes `customData.user_id` (Supabase user id) so the webhook can flip `profiles.plan` to `unlimited`.
 
-### Test cards
+Test card (sandbox): `4242 4242 4242 4242`, any future expiry, CVV `100`.
 
-Use Paddle sandbox cards from their docs (e.g. successful Visa). No real charge in sandbox.
+### 3b. Go live (real purchases)
 
-### Local webhook testing
+Do this in the **live** dashboard: [vendors.paddle.com](https://vendors.paddle.com) — not sandbox.
 
-Sandbox notifications need a public URL. Prefer production webhook on `talkotype.app`, or tunnel `localhost:3000` (Cloudflare Tunnel / ngrok) and point the sandbox destination there.
+1. **Create / open a live Paddle account** (separate from sandbox).
+2. **Complete account verification** (business details, payout bank, tax). Live checkout stays blocked until Paddle approves you.
+3. **Website / domain approval**
+   - Default payment link / approved domain: `https://talkotype.app`
+   - Public legal pages Paddle expects:
+     - Terms: `https://talkotype.app/terms`
+     - Privacy: `https://talkotype.app/privacy`
+     - Pricing: `https://talkotype.app/pricing`
+4. **Recreate catalog** (new live product + prices — do **not** reuse sandbox `pri_` ids):
+   - Product: `Talkotype Unlimited`
+   - Monthly `$20` · Yearly `$168` (same as sandbox)
+5. **Live credentials** (Developer tools → Authentication)
+   - Client-side token → `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` (**no** `test_` prefix)
+   - API key → `PADDLE_API_KEY` (live key, **no** `_sdbx`)
+6. **Live webhook** (Developer tools → Notifications)
+   - Same URL: `https://talkotype.app/api/billing/paddle-webhook`
+   - Same event list as sandbox
+   - New destination secret → `PADDLE_WEBHOOK_SECRET` (replace the sandbox secret)
+7. **Vercel → Project → Settings → Environment Variables** (Production; also Preview if you want):
+
+```bash
+NEXT_PUBLIC_PADDLE_ENV=production
+NEXT_PUBLIC_PADDLE_CLIENT_TOKEN=live_...
+NEXT_PUBLIC_PADDLE_PRICE_MONTHLY=pri_...   # LIVE monthly price id
+NEXT_PUBLIC_PADDLE_PRICE_YEARLY=pri_...    # LIVE yearly price id
+PADDLE_API_KEY=...                         # LIVE api key
+PADDLE_WEBHOOK_SECRET=pdl_ntfset_...       # LIVE notification secret
+```
+
+8. **Redeploy** after changing any `NEXT_PUBLIC_*` var (Vercel → Deployments → Redeploy, or `vercel --prod`). Public vars are baked into the client bundle at build time.
+9. **Smoke test before opening traffic**
+   - Create a **100% discount** coupon in live Paddle (or a tiny real charge you refund).
+   - Buy Unlimited once while logged in → land on `/account?upgraded=1`
+   - Confirm webhook delivery (Paddle → Events → Notifications → 2xx)
+   - Confirm `profiles.plan = unlimited` in Supabase
+10. Remove any “Sandbox checkout” note on `/pricing` (it hides automatically when `NEXT_PUBLIC_PADDLE_ENV=production`).
+
+**Do not mix:** sandbox token + `ENV=production` (or live token + `ENV=sandbox`) → `forbidden` from Paddle.
 
 DB fields: `profiles.paddle_customer_id`, `profiles.paddle_subscription_id`, `invoices.paddle_transaction_id`.
 
